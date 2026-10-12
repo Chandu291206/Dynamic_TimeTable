@@ -1,0 +1,310 @@
+{
+  "academic_year": "2026-27",
+  "semester": "II Year I Semester",
+  "branch": "CSE I",
+  "effective_from": "30-06-2026",
+  "classroom": {
+    "theory": "1302",
+    "labs": {
+      "ML LAB": "1304/05",
+      "MCIOT LAB": "1406/07",
+      "CN LAB": "1306/07"
+    },
+    "class_coordinator": "S. Soujanya",
+    "year_coordinator": "Dr. G. R. Sakthi Dharan"
+  },
+  "working_hours": {
+    "periods": [
+      {
+        "period": 1,
+        "time": "09:00-09:50"
+      },
+      {
+        "period": 2,
+        "time": "09:50-10:40"
+      },
+      {
+        "period": 3,
+        "time": "10:40-11:30"
+      },
+      {
+        "period": 4,
+        "time": "11:30-12:20"
+      },
+      {
+        "period": 5,
+        "time": "12:55-13:45"
+      },
+      {
+        "period": 6,
+        "time": "13:45-14:35"
+      },
+      {
+        "period": 7,
+        "time": "14:35-15:25"
+      }
+    ],
+    "lunch": "12:20-12:55"
+  },
+  "timetable": {
+    "Monday": [
+      {
+        "time": "09:00-12:20",
+        "periods": [1, 2, 3, 4],
+        "subject": "T&P"
+      },
+      {
+        "time": "12:20-12:55",
+        "subject": "LUNCH"
+      },
+      {
+        "time": "12:55-15:25",
+        "periods": [5, 6, 7],
+        "subject": "T&P"
+      }
+    ],
+    "Tuesday": [
+      {
+        "time": "09:00-10:40",
+        "periods": [1, 2],
+        "subject": "CN"
+      },
+      {
+        "time": "10:40-12:20",
+        "periods": [3, 4],
+        "subject": "AI"
+      },
+      {
+        "time": "12:20-12:55",
+        "subject": "LUNCH"
+      },
+      {
+        "time": "12:55-15:25",
+        "periods": [5, 6, 7],
+        "subject": "ML LAB"
+      }
+    ],
+    "Wednesday": [
+      {
+        "time": "09:00-12:20",
+        "periods": [1, 2, 3, 4],
+        "subject": "T&P"
+      },
+      {
+        "time": "12:20-12:55",
+        "subject": "LUNCH"
+      },
+      {
+        "time": "12:55-15:25",
+        "periods": [5, 6, 7],
+        "subject": "T&P"
+      }
+    ],
+    "Thursday": [
+      {
+        "time": "09:00-09:50",
+        "periods": [1],
+        "subject": "COI"
+      },
+      {
+        "time": "09:50-12:20",
+        "periods": [2, 3, 4],
+        "subject": "MCIOT LAB"
+      },
+      {
+        "time": "12:20-12:55",
+        "subject": "LUNCH"
+      },
+      {
+        "time": "12:55-14:35",
+        "periods": [5, 6],
+        "subject": "ML"
+      },
+      {
+        "time": "14:35-15:25",
+        "periods": [7],
+        "subject": "COI"
+      }
+    ],
+    "Friday": [
+      {
+        "time": "09:00-10:40",
+        "periods": [1, 2],
+        "subject": "AI"
+      },
+      {
+        "time": "10:40-12:20",
+        "periods": [3, 4],
+        "subject": "MCIOT"
+      },
+      {
+        "time": "12:20-12:55",
+        "subject": "LUNCH"
+      },
+      {
+        "time": "12:55-13:45",
+        "periods": [5],
+        "subject": "OE"
+      },
+      {
+        "time": "13:45-15:25",
+        "periods": [6, 7],
+        "subject": "CN"
+      }
+    ],
+    "Saturday": [
+      {
+        "time": "09:00-10:40",
+        "periods": [1, 2],
+        "subject": "MCIOT"
+      },
+      {
+        "time": "10:40-12:20",
+        "periods": [3, 4],
+        "subject": "ML"
+      },
+      {
+        "time": "12:20-12:55",
+        "subject": "LUNCH"
+      },
+      {
+        "time": "12:55-15:25",
+        "periods": [5, 6, 7],
+        "subject": "CN LAB"
+      }
+    ]
+  },
+  "courses": [
+    {
+      "course_code": "GR24A3087",
+      "shortform": "CN",
+      "course_name": "Computer Networks",
+      "faculty": "Dr. G. Prasanthi",
+      "staff_id": "1652"
+    },
+    {
+      "course_code": "GR24A3082",
+      "shortform": "ML",
+      "course_name": "Machine Learning",
+      "faculty": "Dr. G. Charles Babu",
+      "staff_id": "1624"
+    },
+    {
+      "course_code": "GR24A3088",
+      "shortform": "MCIOT",
+      "course_name": "Micro Controllers and Internet of Things",
+      "faculty": "Dr. K. Adilakshmi",
+      "staff_id": "846"
+    },
+    {
+      "course_code": "GR24A3130",
+      "shortform": "AI",
+      "course_name": "Artificial Intelligence",
+      "faculty": "Dr. N. Krishna Chythanya",
+      "staff_id": "1397"
+    },
+    {
+      "course_code": "GR24A3092",
+      "shortform": "OE (NPTEL)",
+      "course_name": "Data Science for Engineers",
+      "faculty": "O. Divya Jyothi",
+      "staff_id": "1858"
+    },
+    {
+      "course_code": "GR24A3093",
+      "shortform": "ML LAB",
+      "course_name": "Machine Learning Lab",
+      "faculty": [
+        {
+          "name": "Lohitha Mallireddy",
+          "staff_id": "1818"
+        },
+        {
+          "name": "K. A. Sathish Kumar",
+          "staff_id": "1863"
+        }
+      ]
+    },
+    {
+      "course_code": "GR24A3094",
+      "shortform": "CN LAB",
+      "course_name": "Computer Networks Lab",
+      "faculty": [
+        {
+          "name": "Dr. G. Prasanthi",
+          "staff_id": "1652"
+        },
+        {
+          "name": "D. Pavithra",
+          "staff_id": "1815"
+        }
+      ]
+    },
+    {
+      "course_code": "GR24A3095",
+      "shortform": "MCIOT LAB",
+      "course_name": "Micro Controllers and Internet of Things Lab",
+      "faculty": [
+        {
+          "name": "Dr. K. Adilakshmi",
+          "staff_id": "846"
+        },
+        {
+          "name": "V. Swapna",
+          "staff_id": "1688"
+        }
+      ]
+    },
+    {
+      "course_code": "GR24A2003",
+      "shortform": "COI",
+      "course_name": "Constitution of India",
+      "faculty": "D. Pavithra",
+      "staff_id": "1815"
+    }
+  ],
+  "academic_calendar": [
+    {
+      "event": "Commencement of First Semester Classes",
+      "date": "30-06-2026"
+    },
+    {
+      "event": "I Spell of Instructions",
+      "start_date": "30-06-2026",
+      "end_date": "24-08-2026",
+      "duration": "8 Weeks"
+    },
+    {
+      "event": "I Mid-term Examinations",
+      "start_date": "25-08-2026",
+      "end_date": "28-08-2026",
+      "duration": "3 Days"
+    },
+    {
+      "event": "Submission of I Mid-term Marks to CoE",
+      "deadline": "02-09-2026"
+    },
+    {
+      "event": "II Spell of Instructions (Including Dussehra Vacation)",
+      "start_date": "29-08-2026",
+      "end_date": "30-10-2026",
+      "duration": "9 Weeks"
+    },
+    {
+      "event": "II Mid-term Examinations",
+      "start_date": "02-11-2026",
+      "end_date": "04-11-2026",
+      "duration": "3 Days"
+    },
+    {
+      "event": "Submission of II Mid-term Marks to CoE",
+      "deadline": "09-11-2026"
+    },
+    {
+      "event": "Preparation Holidays and End Semester Examinations (Theory/Practical), Regular/Supplementary",
+      "start_date": "05-11-2026",
+      "end_date": "25-11-2026",
+      "duration": "3 Weeks"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+# Example cron entries for Timetable PostgreSQL Backups
+# Edit with: crontab -e
+
+# Daily backup at 02:00 AM server time with 14-day retention
+0 2 * * * /var/www/timetable/deploy/backup/backup.sh >> /var/log/timetable/backup.log 2>&1
+
+# (Optional) Twice daily backup: at 02:00 AM and 02:00 PM
+# 0 2,14 * * * /var/www/timetable/deploy/backup/backup.sh >> /var/log/timetable/backup.log 2>&1

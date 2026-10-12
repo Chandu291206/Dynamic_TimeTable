@@ -1,0 +1,130 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  CR
+}
+
+model Faculty {
+  id               Int       @id @default(autoincrement())
+  name             String
+  staffId          String?   @unique
+  department       String?
+  designation      String?
+  qualification    String?
+  email            String?
+  phone            String?
+  imageData        Bytes?
+  imageMimeType    String?
+  imageSourceUrl   String?
+  profileSourceUrl String?
+  sourceUpdatedAt  DateTime?
+  lastScrapedAt    DateTime?
+  imageHash        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  timetableSlots   TimetableSlot[]
+  overrides        TimetableOverride[]
+}
+
+model FacultySyncRun {
+  id        Int      @id @default(autoincrement())
+  status    String
+  sourceUrl String
+  created   Int      @default(0)
+  updated   Int      @default(0)
+  unchanged Int      @default(0)
+  failed    Int      @default(0)
+  skipped   Int      @default(0)
+  error     String?
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+
+  @@index([startedAt])
+}
+
+model Subject {
+  id             Int       @id @default(autoincrement())
+  code           String?   @db.VarChar(50)
+  shortform      String?   @db.VarChar(50)
+  name           String    @unique @db.VarChar(120)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  timetableSlots TimetableSlot[]
+  overrides      TimetableOverride[]
+}
+
+model ClassRoom {
+  id            Int                 @id @default(autoincrement())
+  year          Int
+  branch        String
+  section       String
+  academicYear  String?
+  semester      String?
+  effectiveFrom String?
+  metadata      Json?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  slots         TimetableSlot[]
+  overrides     TimetableOverride[]
+  users         User[]
+
+  @@unique([year, branch, section])
+}
+
+model TimetableSlot {
+  id        Int       @id @default(autoincrement())
+  classId   Int
+  day       Int
+  startTime String    @db.Char(5)
+  endTime   String    @db.Char(5)
+  periods   String?
+  subjectId Int?
+  facultyId Int?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  class     ClassRoom @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject   Subject?  @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  faculty   Faculty?  @relation(fields: [facultyId], references: [id], onDelete: Restrict)
+
+  @@index([classId, day])
+  @@unique([classId, day, startTime, endTime])
+}
+
+model TimetableOverride {
+  id        Int       @id @default(autoincrement())
+  classId   Int
+  date      DateTime  @db.Date
+  startTime String    @db.Char(5)
+  endTime   String    @db.Char(5)
+  subjectId Int?
+  facultyId Int?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  class     ClassRoom @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject   Subject?  @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  faculty   Faculty?  @relation(fields: [facultyId], references: [id], onDelete: Restrict)
+
+  @@index([classId, date])
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  passwordHash String
+  role         UserRole
+  isActive     Boolean   @default(true)
+  classId      Int?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  class        ClassRoom? @relation(fields: [classId], references: [id], onDelete: SetNull)
+
+  @@index([role, classId])
+}

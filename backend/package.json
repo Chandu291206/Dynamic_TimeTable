@@ -1,0 +1,51 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "prisma db seed",
+    "prisma:verify": "node prisma/verify.js",
+    "test:public-smoke": "node scripts/smoke-public.js",
+    "test:auth-smoke": "node scripts/smoke-auth.js",
+    "test:cr-dashboard-smoke": "node scripts/smoke-cr-dashboard.js",
+    "test:cr-overrides-smoke": "node scripts/smoke-cr-overrides.js",
+    "test:admin-auth-smoke": "node scripts/smoke-admin-auth.js",
+    "test:admin-crs-smoke": "node scripts/smoke-admin-crs.js",
+    "test:admin-faculty-smoke": "node scripts/smoke-admin-faculty.js",
+    "test:admin-subjects-smoke": "node scripts/smoke-admin-subjects.js",
+    "test:admin-classes-smoke": "node scripts/smoke-admin-classes.js",
+    "test:admin-slots-smoke": "node scripts/smoke-admin-slots.js",
+    "test:unit": "node --test test/*.test.js",
+    "test:integration": "node --test test/api-integration.test.js",
+    "db:backup": "node scripts/db-backup.js",
+    "db:backup:sql": "node scripts/db-backup.js --format=sql",
+    "db:restore": "node scripts/db-restore.js",
+    "db:verify-backup": "node scripts/verify-backup.js",
+    "test": "node --test"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@prisma/client": "^6.19.0",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.6",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "pdf-parse": "^1.1.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14",
+    "prisma": "^6.19.0"
+  }
+}

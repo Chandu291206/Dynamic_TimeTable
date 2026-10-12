@@ -1,0 +1,29 @@
+[Unit]
+Description=Timetable Management System Backend API
+Documentation=https://github.com/your-org/timetable-management
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/timetable/backend
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/timetable/backend.env
+ExecStart=/usr/bin/node src/server.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=timetable-backend
+
+# Security Sandboxing
+CapabilityBoundingSet=
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
