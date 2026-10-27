@@ -1,17 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getClasses } from '../api/public.js'
-
-function formatTheoryRoom(theory, fallback = '') {
-  if (!theory) return fallback
-  if (typeof theory === 'string') return theory
-  if (typeof theory === 'object') {
-    const rooms = Array.from(new Set(Object.values(theory).filter(Boolean)))
-    if (rooms.length === 0) return fallback
-    return rooms.join(' / ')
-  }
-  return String(theory)
-}
+import { formatDefaultTheoryRoom } from '../utils/roomUtils.js'
 
 export default function AllTimetablesPage() {
   const [classes, setClasses] = useState([])
@@ -20,6 +10,19 @@ export default function AllTimetablesPage() {
   const [yearFilter, setYearFilter] = useState('ALL')
   const [branchQuery, setBranchQuery] = useState('')
   const [viewMode, setViewMode] = useState('matrix') // 'matrix' | 'table'
+  const [expandedBranches, setExpandedBranches] = useState({})
+
+  const toggleBranch = (yearNum, branchName) => {
+    setExpandedBranches((prev) => {
+      const current = prev[yearNum]
+      if (current === branchName) {
+        const next = { ...prev }
+        delete next[yearNum]
+        return next
+      }
+      return { ...prev, [yearNum]: branchName }
+    })
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -85,14 +88,6 @@ export default function AllTimetablesPage() {
     return grouped
   }, [filteredClasses])
 
-  // Unique branches for matrix column headers
-  const availableBranches = useMemo(() => {
-    const branchSet = new Set()
-    classes.forEach((c) => {
-      if (c.branch) branchSet.add(c.branch.trim())
-    })
-    return Array.from(branchSet).sort()
-  }, [classes])
 
   return (
     <section className="timetable-page timetables-directory-page" aria-labelledby="all-timetables-heading">
@@ -208,7 +203,7 @@ export default function AllTimetablesPage() {
             </button>
           </div>
         ) : viewMode === 'matrix' ? (
-          /* MATRIX GRID VIEW: Year rows x Branch columns with interactive Section cards */
+          /* MATRIX GRID VIEW: Dynamic Year rows with Branch pills (e.g. CSE:10) that expand below with card dealing */
           <div className="timetable-matrix-container">
             <table className="timetables-matrix-table" aria-label="Academic Timetable Matrix">
               <thead>
@@ -216,11 +211,8 @@ export default function AllTimetablesPage() {
                   <th scope="col" className="matrix-col-year">
                     Year of Study
                   </th>
-                  <th scope="col" className="matrix-col-branch">
-                    Branch / Department
-                  </th>
-                  <th scope="col" className="matrix-col-sections">
-                    Section Options (Click to view timetable)
+                  <th scope="col" className="matrix-col-branches">
+                    Academic Branches & Sections (Click a branch to view sections)
                   </th>
                 </tr>
               </thead>
@@ -235,63 +227,166 @@ export default function AllTimetablesPage() {
                           <th scope="row" className="matrix-cell-year">
                             <span className="year-pill">Year {yearNum}</span>
                           </th>
-                          <td colSpan={2} className="matrix-empty-cell">
+                          <td className="matrix-empty-cell">
                             No classes scheduled for Year {yearNum}
                           </td>
                         </tr>
                       )
                     }
 
-                    return branchesInYear.map((branchName, bIdx) => {
-                      const sectionClasses = matrixData[yearNum][branchName] || []
-                      return (
-                        <tr key={`${yearNum}-${branchName}`} className="matrix-table-row">
-                          {bIdx === 0 && (
-                            <th
-                              scope="row"
-                              rowSpan={branchesInYear.length}
-                              className="matrix-cell-year"
-                            >
-                              <div className="year-cell-content">
-                                <span className="year-num-badge">Year {yearNum}</span>
-                                <span className="year-roman">
-                                  {yearNum === 1 ? 'I' : yearNum === 2 ? 'II' : yearNum === 3 ? 'III' : 'IV'}
-                                </span>
+                    const totalSectionsInYear = branchesInYear.reduce(
+                      (sum, b) => sum + (matrixData[yearNum][b]?.length || 0),
+                      0
+                    )
+                    const activeBranch = expandedBranches[yearNum]
+                    const isAnyExpanded = Boolean(activeBranch && matrixData[yearNum][activeBranch])
+
+                    return (
+                      <Fragment key={yearNum}>
+                        <tr className={`matrix-table-row matrix-year-row ${isAnyExpanded ? 'is-year-expanded' : ''}`}>
+                          <th scope="row" className="matrix-cell-year">
+                            <div className="year-cell-content">
+                              <span className="year-num-badge">Year {yearNum}</span>
+                              <span className="year-roman">
+                                {yearNum === 1 ? 'I' : yearNum === 2 ? 'II' : yearNum === 3 ? 'III' : 'IV'}
+                              </span>
+                              <span className="year-stat-meta">
+                                {branchesInYear.length} {branchesInYear.length === 1 ? 'branch' : 'branches'} · {totalSectionsInYear} {totalSectionsInYear === 1 ? 'sec' : 'secs'}
+                              </span>
+                            </div>
+                          </th>
+
+                          <td className="matrix-cell-branches">
+                            <div className="matrix-branch-row-inner">
+                              <div className="branch-pills-cluster" role="group" aria-label={`Year ${yearNum} Branches`}>
+                                {branchesInYear.map((branchName) => {
+                                  const sectionClasses = matrixData[yearNum][branchName] || []
+                                  const isExpanded = activeBranch === branchName
+                                  return (
+                                    <button
+                                      key={branchName}
+                                      type="button"
+                                      className={`branch-pill-btn ${isExpanded ? 'is-active' : ''}`}
+                                      onClick={() => toggleBranch(yearNum, branchName)}
+                                      aria-expanded={isExpanded}
+                                      aria-controls={`deck-${yearNum}-${branchName}`}
+                                      title={`${isExpanded ? 'Collapse' : 'Expand'} ${branchName} sections`}
+                                    >
+                                      <span className="branch-code">{branchName}</span>
+                                      <span className="branch-count-badge">:{sectionClasses.length}</span>
+                                      <span className="branch-indicator-chevron" aria-hidden="true">
+                                        {isExpanded ? '▲' : '▼'}
+                                      </span>
+                                    </button>
+                                  )
+                                })}
                               </div>
-                            </th>
-                          )}
-                          <td className="matrix-cell-branch">
-                            <span className="branch-tag">{branchName}</span>
-                          </td>
-                          <td className="matrix-cell-sections">
-                            <div className="section-options-grid">
-                              {sectionClasses.map((cls) => {
-                                const theoryRoom = formatTheoryRoom(cls.metadata?.classroom?.theory)
-                                return (
-                                  <Link
-                                    key={cls.id}
-                                    to={`/timetable/${cls.id}`}
-                                    className="section-card-link"
-                                    title={`View ${cls.label} Timetable`}
-                                  >
-                                    <div className="section-card-header">
-                                      <span className="section-letter">Sec {cls.section}</span>
-                                      <span className="section-arrow" aria-hidden="true">→</span>
-                                    </div>
-                                    <div className="section-card-body">
-                                      <span className="section-class-label">{cls.label}</span>
-                                      {theoryRoom && (
-                                        <span className="section-room-tag">Room {theoryRoom}</span>
-                                      )}
-                                    </div>
-                                  </Link>
-                                )
-                              })}
+
+                              <span className="branch-row-hint">
+                                {activeBranch ? (
+                                  <>Showing <b>{activeBranch}</b> sections below</>
+                                ) : (
+                                  <>Click any branch to view sections</>
+                                )}
+                              </span>
                             </div>
                           </td>
                         </tr>
-                      )
-                    })
+
+                        {/* Expansion row displaying section cards with spreading card dealing effect */}
+                        {isAnyExpanded && (
+                          <tr className="matrix-drawer-row">
+                            <td colSpan={2} className="matrix-drawer-cell">
+                              <div
+                                id={`deck-${yearNum}-${activeBranch}`}
+                                className="card-dealer-drawer"
+                                key={`${yearNum}-${activeBranch}`}
+                              >
+                                <div className="dealer-drawer-bar">
+                                  <div className="dealer-drawer-info">
+                                    <span className="dealer-deck-pill">
+                                      🗂️ {activeBranch} Dept
+                                    </span>
+                                    <h3 className="dealer-drawer-title">
+                                      Year {yearNum} · {activeBranch} Department ({matrixData[yearNum][activeBranch].length} {matrixData[yearNum][activeBranch].length === 1 ? 'Section' : 'Sections'})
+                                    </h3>
+                                    <span className="dealer-instruction">
+                                      Select a section card to open its timetable
+                                    </span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="dealer-close-btn"
+                                    onClick={() => toggleBranch(yearNum, activeBranch)}
+                                    title={`Collapse ${activeBranch}`}
+                                  >
+                                    Close ✕
+                                  </button>
+                                </div>
+
+                                <div
+                                  className="dealer-cards-deck"
+                                  role="list"
+                                  aria-label={`${activeBranch} sections`}
+                                >
+                                  {matrixData[yearNum][activeBranch].map((cls, idx) => {
+                                    const theoryRoom = formatDefaultTheoryRoom(cls.metadata?.classroom?.theory)
+                                    const rotValues = [-4, -2, 0, 2, 4, -3, 3]
+                                    const dealRot = rotValues[idx % rotValues.length]
+                                    const dealDelay = idx * 55
+
+                                    return (
+                                      <Link
+                                        key={cls.id}
+                                        to={`/timetable/${cls.id}`}
+                                        className="dealer-card"
+                                        style={{
+                                          '--deal-idx': idx,
+                                          '--deal-delay': `${dealDelay}ms`,
+                                          '--deal-rot': `${dealRot}deg`,
+                                        }}
+                                        role="listitem"
+                                        title={`View ${cls.label} Timetable`}
+                                      >
+                                        <div className="dealer-card-top">
+                                          <span className="dealer-section-tag">
+                                            Section {cls.section}
+                                          </span>
+                                          <span className="dealer-card-badge-num">
+                                            #{idx + 1}
+                                          </span>
+                                        </div>
+
+                                        <div className="dealer-card-body">
+                                          <h4 className="dealer-class-label">{cls.label}</h4>
+                                          {theoryRoom ? (
+                                            <span className="dealer-room-badge">
+                                              Room {theoryRoom}
+                                            </span>
+                                          ) : (
+                                            <span className="dealer-room-badge is-tba">
+                                              Room TBA
+                                            </span>
+                                          )}
+                                          <p className="dealer-term-text">
+                                            {cls.semester || cls.academicYear || 'Academic Year'}
+                                          </p>
+                                        </div>
+
+                                        <div className="dealer-card-footer">
+                                          <span className="dealer-action-text">View timetable</span>
+                                          <span className="dealer-action-arrow" aria-hidden="true">→</span>
+                                        </div>
+                                      </Link>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
                   })}
               </tbody>
             </table>
@@ -312,7 +407,7 @@ export default function AllTimetablesPage() {
               </thead>
               <tbody>
                 {filteredClasses.map((cls) => {
-                  const theoryRoom = formatTheoryRoom(cls.metadata?.classroom?.theory, 'Theory Hall')
+                  const theoryRoom = formatDefaultTheoryRoom(cls.metadata?.classroom?.theory, 'Theory Hall')
                   return (
                     <tr key={cls.id} className="directory-row">
                       <td>

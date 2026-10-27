@@ -1,4 +1,5 @@
 import FacultyAvatar from './FacultyAvatar.jsx'
+import { parseTheoryRoomInfo } from '../utils/roomUtils.js'
 
 function formatDateShort(dateStr) {
   if (!dateStr) return ''
@@ -39,17 +40,6 @@ function formatEffectiveDate(startStr) {
   }
 }
 
-function formatTheoryRoom(theory, fallback = 'Room 1302') {
-  if (!theory) return fallback
-  if (typeof theory === 'string') return theory.startsWith('Room') ? theory : `Room ${theory}`
-  if (typeof theory === 'object') {
-    const rooms = Array.from(new Set(Object.values(theory).filter(Boolean)))
-    if (rooms.length === 0) return fallback
-    return `Room ${rooms.join(' / ')}`
-  }
-  return String(theory)
-}
-
 export default function WeeklyTimetableGrid({
   weeklyData,
   onOpen,
@@ -60,6 +50,10 @@ export default function WeeklyTimetableGrid({
   const days = weeklyData?.days || []
   const courses = weeklyData?.courses || []
   const weekStart = weeklyData?.weekStart
+  const classroom = weeklyData?.classroom || classInfo?.classroom
+  const theoryInfo = parseTheoryRoomInfo(classroom?.theory, 'Room 1302')
+  const labs = classroom?.labs || {}
+  const labEntries = Object.entries(labs).filter(([, r]) => Boolean(r))
 
   // Extract lunch period from class metadata if available
   const lunchHours = classInfo?.working_hours?.lunch || '12:20-12:55'
@@ -134,8 +128,16 @@ export default function WeeklyTimetableGrid({
           <span className="banner-value">{formatEffectiveDate(weekStart)}</span>
         </div>
         <div className="weekly-banner-item weekly-banner-room">
-          <span className="banner-kicker">Hall / Lab</span>
-          <span className="banner-value">Theory: {formatTheoryRoom(classInfo?.classroom?.theory)}</span>
+          <span className="banner-kicker">Theory Hall</span>
+          <span className="banner-value">{theoryInfo.defaultRoom}</span>
+          {theoryInfo.dayVariations.length > 0 && (
+            <span
+              className="banner-room-alt-badge"
+              title={theoryInfo.dayVariations.map((v) => `${v.day}: ${v.room}`).join(', ')}
+            >
+              +{theoryInfo.dayVariations.length} alt day
+            </span>
+          )}
         </div>
       </div>
 
@@ -235,24 +237,24 @@ export default function WeeklyTimetableGrid({
                           type="button"
                           className="matrix-slot-btn"
                           onClick={() => onOpen(slot, fullDayLabel)}
-                          title={`${subjectName} (${slot.startTime} - ${slot.endTime}) · Click for faculty details`}
+                          title={`${subjectName} (${slot.startTime} - ${slot.endTime}) · ${facultyName || 'TBA'} · Click for faculty details`}
                           aria-label={`${subjectName}, ${slot.startTime} to ${slot.endTime}, faculty ${facultyName || 'TBA'}`}
                         >
-                          <div className="matrix-slot-content">
-                            <span className="matrix-slot-subject">{subjectName}</span>
-                            {slot.faculty && (
-                              <div className="matrix-slot-faculty">
-                                <FacultyAvatar faculty={slot.faculty} size="small" />
-                                <span className="matrix-slot-faculty-name" title={facultyName}>
-                                  {facultyName}
-                                </span>
-                              </div>
-                            )}
-                            {slot.isOverride && (
-                              <span className="override-badge matrix-override-badge">
-                                Override
+                          <div className="matrix-slot-cell-row">
+                            <div className="matrix-slot-avatar-wrap">
+                              <FacultyAvatar faculty={slot.faculty} size="cell" />
+                            </div>
+                            <div className="matrix-slot-beside">
+                              <span className="matrix-slot-subject">{subjectName}</span>
+                              <span className="matrix-slot-faculty-name" title={facultyName || 'TBA'}>
+                                {facultyName || 'TBA'}
                               </span>
-                            )}
+                              {slot.isOverride && (
+                                <span className="override-badge matrix-override-badge">
+                                  Override
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </button>
                       </td>
@@ -339,36 +341,115 @@ export default function WeeklyTimetableGrid({
           </div>
         </section>
 
-        {/* Academic Schedule & Almanac Table */}
-        <section className="weekly-bottom-card" aria-labelledby="almanac-heading">
-          <div className="bottom-card-header">
-            <h2 id="almanac-heading" className="bottom-card-title">
-              Academic Almanac & Schedule
-            </h2>
-            <span className="bottom-card-count">Semester Milestones</span>
-          </div>
+        {/* Right Column: Room Allocations & Academic Schedule Stack */}
+        <div className="weekly-bottom-schedule-stack">
+          {/* Room Allocations & Laboratory Venues */}
+          {(labEntries.length > 0 || theoryInfo.dayVariations.length > 0 || classroom?.class_coordinator) && (
+            <section className="weekly-bottom-card room-allocations-card" aria-labelledby="rooms-heading">
+              <div className="bottom-card-header">
+                <h2 id="rooms-heading" className="bottom-card-title">
+                  Room & Laboratory Allocations
+                </h2>
+                <span className="bottom-card-count">Venue Directory</span>
+              </div>
 
-          <div className="bottom-table-wrap">
-            <table className="directory-table almanac-table">
-              <thead>
-                <tr>
-                  <th scope="col">Academic Milestone</th>
-                  <th scope="col">Schedule / Duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                {almanacEntries.map((entry, idx) => (
-                  <tr key={idx}>
-                    <td className="almanac-event">
-                      <b>{entry.event}</b>
-                    </td>
-                    <td className="almanac-timeline">{entry.timeline}</td>
+              <div className="bottom-table-wrap">
+                <table className="directory-table room-allocations-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Session / Lab Name</th>
+                      <th scope="col">Designated Room</th>
+                      <th scope="col">Schedule / Allocation Details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="room-session-name">
+                        <b>Theory Lecture Hall</b>
+                      </td>
+                      <td className="room-venue-cell">
+                        <span className="room-pill is-primary">{theoryInfo.defaultRoom}</span>
+                      </td>
+                      <td className="room-schedule-note">Primary Theory Hall (Standard)</td>
+                    </tr>
+
+                    {theoryInfo.dayVariations.map((v) => (
+                      <tr key={v.day}>
+                        <td className="room-session-name">
+                          Theory ({v.day})
+                        </td>
+                        <td className="room-venue-cell">
+                          <span className="room-pill is-alt">{v.room}</span>
+                        </td>
+                        <td className="room-schedule-note">{v.day}s only (Special Allocation)</td>
+                      </tr>
+                    ))}
+
+                    {labEntries.map(([labName, labRoom]) => (
+                      <tr key={labName}>
+                        <td className="room-session-name">
+                          <b>{labName}</b>
+                        </td>
+                        <td className="room-venue-cell">
+                          <span className="room-pill is-lab">Room {labRoom}</span>
+                        </td>
+                        <td className="room-schedule-note">Practical Laboratory Venue</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {(classroom?.class_coordinator || classroom?.year_coordinator) && (
+                <div className="coordinators-footer">
+                  {classroom.class_coordinator && (
+                    <div className="coord-chip">
+                      <span className="coord-role">Class Coordinator:</span>
+                      <span className="coord-name">{classroom.class_coordinator}</span>
+                    </div>
+                  )}
+                  {classroom.year_coordinator && (
+                    <div className="coord-chip">
+                      <span className="coord-role">Year Coordinator:</span>
+                      <span className="coord-name">{classroom.year_coordinator}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Academic Schedule & Almanac Table */}
+          <section className="weekly-bottom-card" aria-labelledby="almanac-heading">
+            <div className="bottom-card-header">
+              <h2 id="almanac-heading" className="bottom-card-title">
+                Academic Almanac & Schedule
+              </h2>
+              <span className="bottom-card-count">Semester Milestones</span>
+            </div>
+
+            <div className="bottom-table-wrap">
+              <table className="directory-table almanac-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Academic Milestone</th>
+                    <th scope="col">Schedule / Duration</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                </thead>
+                <tbody>
+                  {almanacEntries.map((entry, idx) => (
+                    <tr key={idx}>
+                      <td className="almanac-event">
+                        <b>{entry.event}</b>
+                      </td>
+                      <td className="almanac-timeline">{entry.timeline}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   )
