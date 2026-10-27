@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { clearClassTimetable, createClass, deleteClass, getAdminClasses, updateClass } from '../api/admin.js'
 import UploadTimetableModal from './UploadTimetableModal.jsx'
+import UploadExcelModal from './UploadExcelModal.jsx'
 
 export default function ClassManagement() {
   const [classes, setClasses] = useState([])
@@ -9,6 +10,7 @@ export default function ClassManagement() {
   const [editingClass, setEditingClass] = useState(null)
   const [formData, setFormData] = useState({ year: 3, branch: '', section: '' })
   const [showUploadModal, setShowUploadModal] = useState(false)
+  const [showUploadExcelModal, setShowUploadExcelModal] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -123,7 +125,18 @@ export default function ClassManagement() {
             Create, view, and configure academic batches and sections in the institution.
           </p>
         </div>
-        <div className="admin-header-actions">
+        <div className="admin-header-actions" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={() => {
+              setError('')
+              setSuccess('')
+              setShowUploadExcelModal(true)
+            }}
+          >
+            📊 Upload Timetable Excel (.xlsx)
+          </button>
           <button
             type="button"
             className="button"
@@ -295,6 +308,15 @@ export default function ClassManagement() {
       <UploadTimetableModal
         isOpen={showUploadModal}
         onClose={() => setShowUploadModal(false)}
+        onSuccess={(msg) => {
+          setSuccess(msg)
+          loadClasses()
+        }}
+      />
+
+      <UploadExcelModal
+        isOpen={showUploadExcelModal}
+        onClose={() => setShowUploadExcelModal(false)}
         onSuccess={(msg) => {
           setSuccess(msg)
           loadClasses()
