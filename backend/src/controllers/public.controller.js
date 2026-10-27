@@ -97,7 +97,13 @@ async function getFacultyImage(req, res) {
   if (!parsedId.success) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Faculty ID must be a positive integer' } });
 
   const faculty = await timetableService.getFacultyImage(parsedId.data);
-  if (!faculty || !faculty.imageData || !faculty.imageMimeType) {
+  if (!faculty) {
+    return res.status(404).json({ success: false, error: { code: 'IMAGE_NOT_FOUND', message: 'Faculty not found' } });
+  }
+  if (faculty.imageSourceUrl) {
+    return res.redirect(302, faculty.imageSourceUrl);
+  }
+  if (!faculty.imageData || !faculty.imageMimeType) {
     return res.status(404).json({ success: false, error: { code: 'IMAGE_NOT_FOUND', message: 'Faculty image not found' } });
   }
   res.set('X-Content-Type-Options', 'nosniff');

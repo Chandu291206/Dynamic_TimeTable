@@ -39,7 +39,7 @@ const academicCalendarItemSchema = z.object({
 });
 
 const classroomDetailsSchema = z.object({
-  theory: z.string().trim().optional(),
+  theory: z.union([z.string().trim(), z.record(z.string())]).optional(),
   labs: z.record(z.string()).optional(),
   class_coordinator: z.string().trim().optional(),
   year_coordinator: z.string().trim().optional(),

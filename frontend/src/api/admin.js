@@ -11,6 +11,8 @@ export const scrapeFacultyWeb = (id = null, options) => {
 export const createFaculty = (data, options) => apiPost('/api/admin/faculty', data, options)
 export const updateFaculty = (id, data, options) => apiPut(`/api/admin/faculty/${id}`, data, options)
 export const deleteFaculty = (id, options) => apiDelete(`/api/admin/faculty/${id}`, options)
+export const proxyPdfUrl = (url) => `/api/admin/faculty/proxy-pdf?url=${encodeURIComponent(url)}`
+export const extractPdfText = (payload, options) => apiPost('/api/admin/faculty/extract-pdf-text', payload, options)
 
 // Subjects
 export const getAdminSubjects = (options) => apiGet('/api/admin/subjects', options)
@@ -41,3 +43,6 @@ export const createCR = (data, options) => apiPost('/api/admin/crs', data, optio
 export const updateCR = (id, data, options) => apiPut(`/api/admin/crs/${id}`, data, options)
 export const assignCRClass = (id, classId, options) => apiPut(`/api/admin/crs/${id}/class`, { classId }, options)
 export const deleteCR = (id, options) => apiDelete(`/api/admin/crs/${id}`, options)
+
+// Logs
+export const getTimetableLogs = (options) => apiGet('/api/admin/logs', options)

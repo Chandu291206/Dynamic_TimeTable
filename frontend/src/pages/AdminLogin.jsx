@@ -102,9 +102,9 @@ export default function AdminLogin() {
           <p>
             Default bootstrap credentials: <code>admin</code> / <code>adminpass</code>
           </p>
-          <p>
+          {/* <p>
             Looking for Class Representative workspace? <Link to="/cr/login">CR Sign-in</Link>
-          </p>
+          </p> */}
         </div>
       </div>
     </section>

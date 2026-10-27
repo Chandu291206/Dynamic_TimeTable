@@ -39,6 +39,17 @@ function formatEffectiveDate(startStr) {
   }
 }
 
+function formatTheoryRoom(theory, fallback = 'Room 1302') {
+  if (!theory) return fallback
+  if (typeof theory === 'string') return theory.startsWith('Room') ? theory : `Room ${theory}`
+  if (typeof theory === 'object') {
+    const rooms = Array.from(new Set(Object.values(theory).filter(Boolean)))
+    if (rooms.length === 0) return fallback
+    return `Room ${rooms.join(' / ')}`
+  }
+  return String(theory)
+}
+
 export default function WeeklyTimetableGrid({
   weeklyData,
   onOpen,
@@ -50,17 +61,50 @@ export default function WeeklyTimetableGrid({
   const courses = weeklyData?.courses || []
   const weekStart = weeklyData?.weekStart
 
-  // Fallback periods if none provided in data
-  const effectivePeriods = periods.length > 0 ? periods : [
-    { startTime: '09:00', endTime: '09:50' },
-    { startTime: '09:50', endTime: '10:40' },
-    { startTime: '10:40', endTime: '11:30' },
-    { startTime: '11:30', endTime: '12:20' },
-    { startTime: '12:20', endTime: '13:10' },
-    { startTime: '14:00', endTime: '14:50' },
-    { startTime: '14:50', endTime: '15:40' },
-    { startTime: '15:40', endTime: '16:30' },
+  // Extract lunch period from class metadata if available
+  const lunchHours = classInfo?.working_hours?.lunch || '12:20-12:55'
+  const [lunchStart, lunchEnd] = lunchHours.split('-')
+
+  // Build effective periods list, ensuring lunch break is inserted in order if missing
+  let basePeriods = periods.length > 0 ? [...periods] : [
+    { startTime: '09:00', endTime: '09:50', period: 1 },
+    { startTime: '09:50', endTime: '10:40', period: 2 },
+    { startTime: '10:40', endTime: '11:30', period: 3 },
+    { startTime: '11:30', endTime: '12:20', period: 4 },
+    { startTime: lunchStart, endTime: lunchEnd, period: 'LUNCH', isLunch: true },
+    { startTime: '12:55', endTime: '13:45', period: 5 },
+    { startTime: '13:45', endTime: '14:35', period: 6 },
+    { startTime: '14:35', endTime: '15:25', period: 7 },
   ]
+
+  const hasLunchPeriod = basePeriods.some(
+    (p) =>
+      p.isLunch ||
+      p.period === 'LUNCH' ||
+      (p.startTime === lunchStart && p.endTime === lunchEnd) ||
+      (p.startTime === '12:20' && p.endTime === '12:55')
+  )
+
+  if (!hasLunchPeriod && lunchStart && lunchEnd) {
+    basePeriods.push({
+      startTime: lunchStart,
+      endTime: lunchEnd,
+      period: 'LUNCH',
+      isLunch: true,
+    })
+  }
+
+  const effectivePeriods = [...basePeriods].sort((a, b) =>
+    a.startTime.localeCompare(b.startTime)
+  )
+
+  function isLunchPeriod(p) {
+    if (!p) return false
+    if (p.isLunch || p.period === 'LUNCH') return true
+    if (p.startTime === lunchStart && p.endTime === lunchEnd) return true
+    if (p.startTime === '12:20' && (p.endTime === '12:55' || p.endTime === '13:00')) return true
+    return false
+  }
 
   // Default almanac entries matching GRIET academic calendar
   const almanacEntries = [
@@ -91,7 +135,7 @@ export default function WeeklyTimetableGrid({
         </div>
         <div className="weekly-banner-item weekly-banner-room">
           <span className="banner-kicker">Hall / Lab</span>
-          <span className="banner-value">Theory: Room 1302</span>
+          <span className="banner-value">Theory: {formatTheoryRoom(classInfo?.classroom?.theory)}</span>
         </div>
       </div>
 
@@ -104,20 +148,20 @@ export default function WeeklyTimetableGrid({
                 DAY
               </th>
               {effectivePeriods.map((period, pIdx) => {
-                const isLunchPeriod =
-                  period.startTime === '12:20' ||
-                  period.startTime === '12:55' ||
-                  (period.startTime >= '12:20' && period.endTime <= '13:30')
+                const isLunchCol = isLunchPeriod(period)
                 return (
                   <th
                     key={`${period.startTime}-${period.endTime}-${pIdx}`}
                     scope="col"
-                    className={`matrix-th-period ${isLunchPeriod ? 'matrix-th-lunch' : ''}`}
+                    className={`matrix-th-period ${isLunchCol ? 'matrix-th-lunch' : ''}`}
                   >
+                    <span className="matrix-th-period-label">
+                      {isLunchCol ? 'LUNCH' : `PERIOD ${period.period || pIdx + 1}`}
+                    </span>
                     <span className="matrix-th-time">
                       {period.startTime} - {period.endTime}
                     </span>
-                    {isLunchPeriod && <span className="matrix-th-sub">Lunch Break</span>}
+                    {isLunchCol && <span className="matrix-th-sub">Break</span>}
                   </th>
                 )
               })}
@@ -145,21 +189,9 @@ export default function WeeklyTimetableGrid({
 
                   {/* Period Cells */}
                   {effectivePeriods.map((period, pIdx) => {
-                    // Match slot that corresponds to this period
-                    const slot = dayObj.slots?.find(
-                      (s) =>
-                        s.startTime === period.startTime ||
-                        (s.startTime <= period.startTime && s.endTime >= period.endTime)
-                    )
+                    const isLunchCol = isLunchPeriod(period)
 
-                    const isLunchSlot =
-                      slot?.subject?.name?.trim().toUpperCase() === 'LUNCH' ||
-                      (!slot &&
-                        (period.startTime === '12:20' ||
-                          period.startTime === '12:55' ||
-                          (period.startTime >= '12:20' && period.endTime <= '13:10')))
-
-                    if (isLunchSlot) {
+                    if (isLunchCol) {
                       return (
                         <td
                           key={`lunch-${pIdx}`}
@@ -169,6 +201,14 @@ export default function WeeklyTimetableGrid({
                         </td>
                       )
                     }
+
+                    // Match non-lunch slot that corresponds to this period
+                    const slot = dayObj.slots?.find(
+                      (s) =>
+                        s.subject?.name?.trim().toUpperCase() !== 'LUNCH' &&
+                        (s.startTime === period.startTime ||
+                          (s.startTime <= period.startTime && s.endTime >= period.endTime))
+                    )
 
                     if (!slot) {
                       return (

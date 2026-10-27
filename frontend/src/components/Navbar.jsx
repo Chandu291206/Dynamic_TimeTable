@@ -52,12 +52,14 @@ export default function Navbar() {
         </button>
 
         <div className={`nav-links ${menuOpen ? 'is-open' : ''}`}>
-          <NavLink to="/">Classes</NavLink>
+          <NavLink to="/" end>Home</NavLink>
+          <NavLink to="/timetables">All Timetables</NavLink>
+          {/* CR login and dashboard routes disabled
           {user?.role === 'CR' ? (
             <NavLink to="/cr/dashboard">CR Dashboard</NavLink>
           ) : (
             <NavLink to="/cr/login">CR Login</NavLink>
-          )}
+          )} */}
           {user?.role === 'ADMIN' ? (
             <NavLink to="/admin/dashboard">Admin Dashboard</NavLink>
           ) : (

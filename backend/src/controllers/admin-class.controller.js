@@ -2,6 +2,7 @@ const { z } = require('zod');
 const prisma = require('../config/database');
 const { classSchema } = require('../validators/class.schema');
 const { classLabel } = require('../services/timetable.service');
+const { recordLog } = require('../services/timetable-log.service');
 const logger = require('../utils/logger');
 
 const idSchema = z.coerce.number().int().positive();
@@ -74,6 +75,14 @@ async function remove(req, res) {
   ]);
 
   logger.audit('CLASS_DELETED', { classId: id, label: classLabel(classRoom), adminUserId: req.user.id });
+  await recordLog({
+    action: 'CLASS_DELETED',
+    performedBy: req.user?.username || 'Administrator',
+    year: classRoom.year,
+    branch: classRoom.branch,
+    section: classRoom.section,
+    details: `Deleted class ${classLabel(classRoom)}`,
+  });
   return res.status(204).send();
 }
 
@@ -97,6 +106,17 @@ async function clearTimetable(req, res) {
     clearedSlots: deletedSlots.count,
     clearedOverrides: deletedOverrides.count,
     adminUserId: req.user.id,
+  });
+
+  await recordLog({
+    action: 'TIMETABLE_CLEARED',
+    performedBy: req.user?.username || 'Administrator',
+    year: classRoom.year,
+    branch: classRoom.branch,
+    section: classRoom.section,
+    day: 'All Week',
+    date: new Date().toISOString().slice(0, 10),
+    details: `Cleared timetable for ${classLabel(classRoom)} (${deletedSlots.count} slots, ${deletedOverrides.count} overrides removed)`,
   });
 
   return res.json({
@@ -125,32 +145,82 @@ async function uploadTimetable(req, res) {
   if (!payload || typeof payload !== 'object') {
     return res.status(400).json({
       success: false,
-      error: { code: 'INVALID_PAYLOAD', message: 'Request body must be a JSON object' },
+      error: { code: 'INVALID_PAYLOAD', message: 'Request body must be a JSON object or array' },
     });
   }
 
   const { validateTimetableJson, importTimetableJson } = require('../services/timetable-json.service');
-  const validation = await validateTimetableJson(payload);
-  if (!validation.success) {
+
+  const isBatch = Array.isArray(payload);
+  const items = isBatch ? payload : [payload];
+
+  if (items.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'EMPTY_PAYLOAD', message: 'Payload contains no timetable entries' },
+    });
+  }
+
+  // Validate all items
+  const validatedItems = [];
+  const errors = [];
+  for (let i = 0; i < items.length; i++) {
+    const validation = await validateTimetableJson(items[i]);
+    if (!validation.success) {
+      errors.push({ index: i, errors: validation.error.flatten().fieldErrors });
+    } else {
+      validatedItems.push(validation.data);
+    }
+  }
+
+  if (errors.length > 0) {
     return res.status(400).json({
       success: false,
       error: {
         code: 'VALIDATION_ERROR',
-        message: 'Invalid timetable JSON structure',
-        fields: validation.error.flatten().fieldErrors,
+        message: isBatch
+          ? `Validation failed for ${errors.length} of ${items.length} timetable entries`
+          : 'Invalid timetable JSON structure',
+        fields: isBatch ? errors : errors[0]?.errors,
       },
     });
   }
 
   try {
-    const { classRoom, importedSlotsCount } = await importTimetableJson(validation.data, { db: prisma });
-    logger.audit('TIMETABLE_IMPORTED', {
-      classId: classRoom.id,
-      label: classLabel(classRoom),
-      slotsCount: importedSlotsCount,
-      adminUserId: req.user.id,
-    });
+    const results = [];
+    for (const validItem of validatedItems) {
+      const { classRoom, importedSlotsCount } = await importTimetableJson(validItem, { db: prisma });
+      logger.audit('TIMETABLE_IMPORTED', {
+        classId: classRoom.id,
+        label: classLabel(classRoom),
+        slotsCount: importedSlotsCount,
+        adminUserId: req.user.id,
+      });
 
+      await recordLog({
+        action: 'TIMETABLE_UPLOAD',
+        performedBy: req.user?.username || 'Administrator',
+        year: classRoom.year,
+        branch: classRoom.branch,
+        section: classRoom.section,
+        day: 'All Week',
+        date: validItem.effective_from || new Date().toISOString().slice(0, 10),
+        details: `Uploaded & synchronized timetable (${importedSlotsCount} sessions scheduled) for ${classLabel(classRoom)}`,
+      });
+
+      results.push({ classRoom, importedSlotsCount });
+    }
+
+    if (isBatch) {
+      const totalSlots = results.reduce((acc, r) => acc + r.importedSlotsCount, 0);
+      return res.status(200).json({
+        success: true,
+        message: `Successfully uploaded and synced ${results.length} timetables (${totalSlots} total sessions scheduled)`,
+        data: results.map((r) => serialize(r.classRoom)),
+      });
+    }
+
+    const { classRoom, importedSlotsCount } = results[0];
     return res.status(200).json({
       success: true,
       message: `Successfully uploaded and synced timetable for ${classLabel(classRoom)} (${importedSlotsCount} sessions scheduled)`,

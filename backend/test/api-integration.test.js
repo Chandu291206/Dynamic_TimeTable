@@ -138,10 +138,10 @@ test('Protected endpoints reject unauthenticated requests with 401 UNAUTHORIZED'
 });
 
 // ============================================================================
-// 3. CR Endpoints Integration
+// 3. CR Endpoints Integration (Commented out per task 2)
 // ============================================================================
 
-test('POST /api/auth/cr/login successfully authenticates CR account', async () => {
+test('POST /api/auth/cr/login successfully authenticates CR account', { skip: 'CR login commented out' }, async () => {
   const res = await jsonFetch('/auth/cr/login', {
     method: 'POST',
     body: {
@@ -157,7 +157,7 @@ test('POST /api/auth/cr/login successfully authenticates CR account', async () =
   assert.equal('passwordHash' in res.body.data.user, false);
 });
 
-test('GET /api/cr/me returns verified CR profile', async () => {
+test('GET /api/cr/me returns verified CR profile', { skip: 'CR features commented out' }, async () => {
   assert.ok(crToken, 'CR token must be available');
   const res = await jsonFetch('/cr/me', {
     headers: { authorization: `Bearer ${crToken}` },
@@ -168,7 +168,7 @@ test('GET /api/cr/me returns verified CR profile', async () => {
   assert.equal(res.body.data.user.role, 'CR');
 });
 
-test('GET /api/cr/dashboard returns CR assigned workspace data', async () => {
+test('GET /api/cr/dashboard returns CR assigned workspace data', { skip: 'CR features commented out' }, async () => {
   assert.ok(crToken, 'CR token must be available');
   const res = await jsonFetch('/cr/dashboard', {
     headers: { authorization: `Bearer ${crToken}` },
@@ -182,7 +182,7 @@ test('GET /api/cr/dashboard returns CR assigned workspace data', async () => {
   assert.ok(Array.isArray(res.body.data.faculty));
 });
 
-test('POST /api/cr/overrides & GET /api/cr/overrides manages timetable overrides', async () => {
+test('POST /api/cr/overrides & GET /api/cr/overrides manages timetable overrides', { skip: 'CR features commented out' }, async () => {
   assert.ok(crToken, 'CR token must be available');
   const crHeaders = { authorization: `Bearer ${crToken}` };
 
@@ -222,7 +222,7 @@ test('POST /api/cr/overrides & GET /api/cr/overrides manages timetable overrides
   }
 });
 
-test('CR token is denied access to admin endpoints with 403 FORBIDDEN', async () => {
+test('CR token is denied access to admin endpoints with 403 FORBIDDEN', { skip: 'CR features commented out' }, async () => {
   assert.ok(crToken, 'CR token must be available');
   const res = await jsonFetch('/admin/faculty', {
     headers: { authorization: `Bearer ${crToken}` },

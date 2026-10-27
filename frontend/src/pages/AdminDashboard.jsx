@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import ClassManagement from '../admin/ClassManagement.jsx'
-import CRManagement from '../admin/CRManagement.jsx'
+// import CRManagement from '../admin/CRManagement.jsx'
 import FacultyManagement from '../admin/FacultyManagement.jsx'
 import SlotManagement from '../admin/SlotManagement.jsx'
 import SubjectManagement from '../admin/SubjectManagement.jsx'
+import TimetableLogs from '../admin/TimetableLogs.jsx'
 import useAuth from '../hooks/useAuth.js'
 
 const TABS = [
@@ -12,7 +13,8 @@ const TABS = [
   { id: 'subjects', label: 'Subjects', icon: '📚' },
   { id: 'classes', label: 'Classes', icon: '🏛' },
   { id: 'slots', label: 'Timetable Slots', icon: '⏱' },
-  { id: 'crs', label: 'CR Accounts', icon: '🎓' },
+  { id: 'logs', label: 'Timetable Logs', icon: '📋' },
+  // { id: 'crs', label: 'CR Accounts', icon: '🎓' },
 ]
 
 export default function AdminDashboard() {
@@ -92,7 +94,8 @@ export default function AdminDashboard() {
           {activeTab === 'subjects' && <SubjectManagement />}
           {activeTab === 'classes' && <ClassManagement />}
           {activeTab === 'slots' && <SlotManagement />}
-          {activeTab === 'crs' && <CRManagement />}
+          {activeTab === 'logs' && <TimetableLogs />}
+          {/* {activeTab === 'crs' && <CRManagement />} */}
         </main>
       </div>
     </section>

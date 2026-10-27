@@ -12,6 +12,12 @@ export default function UploadTimetableModal({ isOpen, onClose, onSuccess }) {
 
   if (!isOpen) return null
 
+  const safeStr = (v, fallback = 'N/A') => {
+    if (v === null || v === undefined) return fallback
+    if (typeof v === 'object') return JSON.stringify(v)
+    return String(v)
+  }
+
   const parseAndPreview = (text, name = '') => {
     setJsonText(text)
     setParsingError('')
@@ -25,22 +31,65 @@ export default function UploadTimetableModal({ isOpen, onClose, onSuccess }) {
 
     try {
       const parsed = JSON.parse(text)
+      if (!parsed || typeof parsed !== 'object') {
+        setParsingError('The file does not contain a valid JSON object.')
+        setPreview(null)
+        return
+      }
+
+      if (Array.isArray(parsed)) {
+        if (parsed.length === 0) {
+          setParsingError('The selected JSON array is empty.')
+          setPreview(null)
+          return
+        }
+
+        const invalidIdx = parsed.findIndex(
+          (p) => !p || typeof p !== 'object' || !p.semester || !p.branch || !p.timetable || !p.working_hours
+        )
+        if (invalidIdx !== -1) {
+          setParsingError(
+            `Entry #${invalidIdx + 1} in the array is missing required timetable fields ("semester", "branch", "working_hours", or "timetable").`
+          )
+          setPreview(null)
+          return
+        }
+
+        const totalCourses = parsed.reduce((acc, p) => acc + (Array.isArray(p.courses) ? p.courses.length : 0), 0)
+        const totalPeriods = parsed.reduce((acc, p) => acc + (Array.isArray(p.working_hours?.periods) ? p.working_hours.periods.length : 0), 0)
+
+        setPreview({
+          isBatch: true,
+          batchCount: parsed.length,
+          academicYear: safeStr(parsed[0].academic_year),
+          semester: `Batch: ${parsed.length} Classes`,
+          branch: parsed.map((p) => p.branch).join(', '),
+          effectiveFrom: safeStr(parsed[0].effective_from),
+          theoryRoom: `${parsed.length} class schedules combined`,
+          totalDays: 6,
+          totalCourses,
+          totalPeriods,
+        })
+        return
+      }
+
       if (!parsed.semester || !parsed.branch || !parsed.timetable || !parsed.working_hours) {
         setParsingError('JSON must include "semester", "branch", "working_hours", and "timetable".')
         setPreview(null)
         return
       }
 
-      const totalDays = Object.keys(parsed.timetable || {}).length
-      const totalCourses = (parsed.courses || []).length
-      const totalPeriods = (parsed.working_hours?.periods || []).length
+      const totalDays = (parsed.timetable && typeof parsed.timetable === 'object') ? Object.keys(parsed.timetable).length : 0
+      const totalCourses = Array.isArray(parsed.courses) ? parsed.courses.length : 0
+      const totalPeriods = Array.isArray(parsed.working_hours?.periods) ? parsed.working_hours.periods.length : 0
 
       setPreview({
-        academicYear: parsed.academic_year || 'N/A',
-        semester: parsed.semester,
-        branch: parsed.branch,
-        effectiveFrom: parsed.effective_from || 'N/A',
-        theoryRoom: parsed.classroom?.theory || 'N/A',
+        isBatch: false,
+        academicYear: safeStr(parsed.academic_year),
+        semester: safeStr(parsed.semester),
+        branch: safeStr(parsed.branch),
+        effectiveFrom: safeStr(parsed.effective_from),
+        theoryRoom: safeStr(parsed.classroom?.theory),
         totalDays,
         totalCourses,
         totalPeriods,
@@ -61,6 +110,9 @@ export default function UploadTimetableModal({ isOpen, onClose, onSuccess }) {
       if (typeof content === 'string') {
         parseAndPreview(content, file.name)
       }
+    }
+    reader.onerror = () => {
+      setUploadError('Failed to read selected file.')
     }
     reader.readAsText(file)
   }
@@ -86,10 +138,17 @@ export default function UploadTimetableModal({ isOpen, onClose, onSuccess }) {
     try {
       const res = await uploadTimetable(payload)
       const message = res?.message || 'Timetable uploaded successfully.'
-      onSuccess(message, res?.data)
+      if (typeof onSuccess === 'function') {
+        try {
+          onSuccess(message, res?.data)
+        } catch (callErr) {
+          console.error('onSuccess callback error:', callErr)
+        }
+      }
       onClose()
     } catch (err) {
-      setUploadError(err.message || 'Failed to upload timetable.')
+      const fieldErrors = err?.fields ? Object.entries(err.fields).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join('; ') : ''
+      setUploadError(String(err?.message || 'Failed to upload timetable.') + (fieldErrors ? ` — ${fieldErrors}` : ''))
     } finally {
       setSubmitting(false)
     }
@@ -186,11 +245,17 @@ export default function UploadTimetableModal({ isOpen, onClose, onSuccess }) {
           {/* Parsed Preview Card */}
           {preview && (
             <div className="upload-preview-box">
-              <span className="preview-heading">✓ Detected Timetable Details</span>
+              <span className="preview-heading">
+                {preview.isBatch
+                  ? `✓ Detected Combined Batch File (${preview.batchCount} Class Timetables)`
+                  : '✓ Detected Timetable Details'}
+              </span>
               <div className="preview-grid">
                 <div>
-                  <span className="preview-label">Class</span>
-                  <b className="preview-val">{preview.branch} ({preview.semester})</b>
+                  <span className="preview-label">{preview.isBatch ? 'Classes in File' : 'Class'}</span>
+                  <b className="preview-val">
+                    {preview.isBatch ? `${preview.batchCount} Classes (${preview.branch})` : `${preview.branch} (${preview.semester})`}
+                  </b>
                 </div>
                 <div>
                   <span className="preview-label">Academic Year</span>
@@ -203,7 +268,9 @@ export default function UploadTimetableModal({ isOpen, onClose, onSuccess }) {
                 <div>
                   <span className="preview-label">Schedule Breakdown</span>
                   <b className="preview-val">
-                    {preview.totalDays} Days · {preview.totalPeriods} Periods · {preview.totalCourses} Courses
+                    {preview.isBatch
+                      ? `${preview.batchCount} Timetables · ${preview.totalCourses} Total Courses · ${preview.totalPeriods} Period Definitions`
+                      : `${preview.totalDays} Days · ${preview.totalPeriods} Periods · ${preview.totalCourses} Courses`}
                   </b>
                 </div>
               </div>

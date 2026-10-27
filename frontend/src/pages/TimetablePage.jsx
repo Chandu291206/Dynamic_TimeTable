@@ -78,8 +78,8 @@ export default function TimetablePage() {
   }
 
   return (
-    <section className="timetable-page" aria-labelledby="timetable-heading">
-      <div className="timetable-wrap">
+    <section className={`timetable-page ${viewMode === 'week' ? 'timetable-page--week' : ''}`} aria-labelledby="timetable-heading">
+      <div className={`timetable-wrap ${viewMode === 'week' ? 'timetable-wrap--week' : ''}`}>
         <div className="timetable-top-bar">
           <Link className="back-link" to="/">
             ← All classes

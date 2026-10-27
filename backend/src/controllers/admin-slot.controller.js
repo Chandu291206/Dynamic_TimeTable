@@ -3,6 +3,7 @@ const prisma = require('../config/database');
 const { slotSchema } = require('../validators/slot.schema');
 const { timeToMinutes, timesOverlap } = require('../utils/time');
 const { classLabel } = require('../services/timetable.service');
+const { recordLog } = require('../services/timetable-log.service');
 const logger = require('../utils/logger');
 
 const idSchema = z.coerce.number().int().positive();
@@ -82,6 +83,16 @@ async function create(req, res) {
     facultyId: slot.facultyId,
     adminId: req.user?.id,
   });
+  await recordLog({
+    action: 'SLOT_CREATED',
+    performedBy: req.user?.username || 'Administrator',
+    year: slot.class?.year,
+    branch: slot.class?.branch,
+    section: slot.class?.section,
+    day: slot.day,
+    date: new Date().toISOString().slice(0, 10),
+    details: `Added slot ${slot.startTime}–${slot.endTime} (${slot.subject?.name || 'No subject'} / ${slot.faculty?.name || 'TBA'}) for ${slot.class ? classLabel(slot.class) : 'Class'}`,
+  });
   return res.status(201).json({ success: true, data: serialize(slot) });
 }
 
@@ -103,12 +114,22 @@ async function update(req, res) {
     facultyId: slot.facultyId,
     adminId: req.user?.id,
   });
+  await recordLog({
+    action: 'SLOT_UPDATED',
+    performedBy: req.user?.username || 'Administrator',
+    year: slot.class?.year,
+    branch: slot.class?.branch,
+    section: slot.class?.section,
+    day: slot.day,
+    date: new Date().toISOString().slice(0, 10),
+    details: `Updated slot ${slot.startTime}–${slot.endTime} (${slot.subject?.name || 'No subject'} / ${slot.faculty?.name || 'TBA'}) for ${slot.class ? classLabel(slot.class) : 'Class'}`,
+  });
   return res.json({ success: true, data: serialize(slot) });
 }
 
 async function remove(req, res) {
   const id = parseId(req, res); if (!id) return undefined;
-  const existing = await prisma.timetableSlot.findUnique({ where: { id } });
+  const existing = await prisma.timetableSlot.findUnique({ where: { id }, include: { class: true, subject: true, faculty: true } });
   if (!existing) return res.status(404).json({ success: false, error: { code: 'SLOT_NOT_FOUND', message: 'Timetable slot not found' } });
   await prisma.timetableSlot.delete({ where: { id } });
   logger.audit('SLOT_DELETED', {
@@ -116,6 +137,16 @@ async function remove(req, res) {
     classId: existing.classId,
     day: existing.day,
     adminId: req.user?.id,
+  });
+  await recordLog({
+    action: 'SLOT_DELETED',
+    performedBy: req.user?.username || 'Administrator',
+    year: existing.class?.year,
+    branch: existing.class?.branch,
+    section: existing.class?.section,
+    day: existing.day,
+    date: new Date().toISOString().slice(0, 10),
+    details: `Removed slot ${existing.startTime}–${existing.endTime} (${existing.subject?.name || 'No subject'}) from ${existing.class ? classLabel(existing.class) : 'Class'}`,
   });
   return res.status(204).send();
 }

@@ -128,3 +128,18 @@ model User {
 
   @@index([role, classId])
 }
+
+model TimetableLog {
+  id          Int      @id @default(autoincrement())
+  action      String   @db.VarChar(100)
+  performedBy String   @db.VarChar(100)
+  year        Int?
+  branch      String?  @db.VarChar(50)
+  section     String?  @db.VarChar(50)
+  day         String?  @db.VarChar(50)
+  date        String?  @db.VarChar(50)
+  details     String?  @db.Text
+  timestamp   DateTime @default(now())
+
+  @@index([timestamp(sort: Desc)])
+}

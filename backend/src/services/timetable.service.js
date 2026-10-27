@@ -18,7 +18,7 @@ function facultyPayload(faculty) {
     email: faculty.email,
     profileSourceUrl: faculty.profileSourceUrl,
     imageSourceUrl: faculty.imageSourceUrl,
-    imageUrl: faculty.imageData ? `/api/faculty/${faculty.id}/image` : (faculty.imageSourceUrl || null),
+    imageUrl: faculty.imageSourceUrl || (faculty.imageData ? `/api/faculty/${faculty.id}/image` : null),
   };
 }
 
@@ -178,10 +178,19 @@ async function getWeeklyTimetable(classId, referenceDate) {
     academic_calendar: meta.academic_calendar || [],
   };
 
-  const canonicalPeriods = meta.working_hours?.periods?.map((p) => {
+  let canonicalPeriods = meta.working_hours?.periods?.map((p) => {
     const [s, e] = (p.time || '').split('-');
     return { startTime: s, endTime: e, period: p.period };
-  });
+  }) || [];
+
+  const lunchTime = meta.working_hours?.lunch || '12:20-12:55';
+  if (lunchTime && canonicalPeriods.length > 0) {
+    const [ls, le] = lunchTime.split('-');
+    if (ls && le && !canonicalPeriods.some((p) => p.startTime === ls)) {
+      canonicalPeriods.push({ startTime: ls, endTime: le, period: 'LUNCH', isLunch: true });
+      canonicalPeriods.sort((a, b) => a.startTime.localeCompare(b.startTime));
+    }
+  }
 
   const canonicalCourses = meta.courses && meta.courses.length > 0 ? meta.courses.map((c) => ({
     name: c.shortform || c.course_name,
@@ -215,7 +224,7 @@ async function getWeeklyTimetable(classId, referenceDate) {
 async function getFacultyImage(id) {
   return prisma.faculty.findUnique({
     where: { id },
-    select: { imageData: true, imageMimeType: true },
+    select: { imageSourceUrl: true, imageData: true, imageMimeType: true },
   });
 }
 

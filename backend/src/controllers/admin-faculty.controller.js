@@ -11,8 +11,8 @@ function serialize(faculty) {
   const { imageData, ...safeFaculty } = faculty;
   return {
     ...safeFaculty,
-    hasImage: !!imageData,
-    imageUrl: faculty.imageData ? `/api/faculty/${faculty.id}/image` : (faculty.imageSourceUrl || null),
+    hasImage: Boolean(faculty.imageSourceUrl),
+    imageUrl: faculty.imageSourceUrl || null,
   };
 }
 
@@ -111,4 +111,54 @@ async function scrapeWebSingle(req, res) {
   }
 }
 
-module.exports = { list, getById, create, update, remove, sync, syncStatus, scrapeWeb, scrapeWebSingle };
+async function proxyPdf(req, res) {
+  const rawUrl = req.query.url;
+  if (!rawUrl) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_URL', message: 'url query parameter is required' } });
+  }
+  try {
+    const parsed = new URL(rawUrl);
+    if (!parsed.hostname.includes('griet.ac.in')) {
+      return res.status(403).json({ success: false, error: { code: 'INVALID_DOMAIN', message: 'Only GRIET domain URLs can be proxied' } });
+    }
+    const response = await fetch(rawUrl, {
+      signal: AbortSignal.timeout(15000),
+      headers: { 'user-agent': 'Timetable-Management-System/1.0' },
+    });
+    if (!response.ok) {
+      return res.status(response.status).json({ success: false, error: { code: 'FETCH_FAILED', message: `Upstream HTTP ${response.status}` } });
+    }
+    res.set('Content-Type', 'application/pdf');
+    const arrayBuffer = await response.arrayBuffer();
+    return res.send(Buffer.from(arrayBuffer));
+  } catch (err) {
+    return res.status(502).json({ success: false, error: { code: 'PROXY_FAILED', message: err.message } });
+  }
+}
+
+async function extractPdfText(req, res) {
+  try {
+    const { data, url } = req.body || {};
+    let buffer;
+    if (data) {
+      buffer = Buffer.from(data, 'base64');
+    } else if (url) {
+      const parsed = new URL(url);
+      if (!parsed.hostname.includes('griet.ac.in')) {
+        return res.status(403).json({ success: false, error: { code: 'INVALID_DOMAIN', message: 'Only GRIET URLs allowed' } });
+      }
+      const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      buffer = Buffer.from(await response.arrayBuffer());
+    } else {
+      return res.status(400).json({ success: false, error: { code: 'MISSING_DATA', message: 'data (base64) or url is required' } });
+    }
+    const pdf = require('pdf-parse');
+    const parsed = await pdf(buffer);
+    return res.json({ success: true, text: parsed.text || '' });
+  } catch (err) {
+    return res.status(502).json({ success: false, error: { code: 'PDF_PARSE_FAILED', message: err.message } });
+  }
+}
+
+module.exports = { list, getById, create, update, remove, sync, syncStatus, scrapeWeb, scrapeWebSingle, proxyPdf, extractPdfText };

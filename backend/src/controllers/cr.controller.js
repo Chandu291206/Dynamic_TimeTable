@@ -4,6 +4,7 @@ const { classLabel, getTimetable } = require('../services/timetable.service');
 const { parseDate, todayAsIsoDate } = require('../utils/dates');
 const { timeToMinutes, timesOverlap } = require('../utils/time');
 const { createOverrideSchema } = require('../validators/override.schema');
+const { recordLog } = require('../services/timetable-log.service');
 const logger = require('../utils/logger');
 
 const daysSchema = z.coerce.number().int().min(1).max(31).default(7);
@@ -110,9 +111,19 @@ async function createOverride(req, res) {
 
   const override = await prisma.timetableOverride.create({
     data: { classId: req.user.classId, date, startTime, endTime, subjectId, facultyId },
-    include: { subject: true, faculty: true },
+    include: { subject: true, faculty: true, class: true },
   });
   logger.audit('OVERRIDE_CREATED', { overrideId: override.id, classId: override.classId, date: dateValue, startTime, endTime, crUserId: req.user.id });
+  await recordLog({
+    action: 'TIMETABLE_OVERWRITE',
+    performedBy: req.user?.username || 'CR',
+    year: override.class?.year,
+    branch: override.class?.branch,
+    section: override.class?.section,
+    day: day,
+    date: dateValue,
+    details: `Overrode slot ${startTime}–${endTime} with ${override.subject?.name || 'Self study'} (${override.faculty?.name || 'TBA'})`,
+  });
   return res.status(201).json({ success: true, data: formatOverride(override) });
 }
 
@@ -127,6 +138,7 @@ async function deleteOverride(req, res) {
 
   const override = await prisma.timetableOverride.findUnique({
     where: { id: parsedId.data },
+    include: { class: true, subject: true, faculty: true },
   });
   if (!override) {
     return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Override not found' } });
@@ -141,6 +153,16 @@ async function deleteOverride(req, res) {
 
   await prisma.timetableOverride.delete({ where: { id: parsedId.data } });
   logger.audit('OVERRIDE_DELETED', { overrideId: override.id, classId: override.classId, crUserId: req.user.id });
+  await recordLog({
+    action: 'OVERRIDE_DELETED',
+    performedBy: req.user?.username || 'CR',
+    year: override.class?.year,
+    branch: override.class?.branch,
+    section: override.class?.section,
+    day: null,
+    date: override.date ? override.date.toISOString().slice(0, 10) : null,
+    details: `Removed override ${override.startTime}–${override.endTime} (${override.subject?.name || 'Slot'})`,
+  });
   return res.status(204).send();
 }
 

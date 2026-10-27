@@ -5,6 +5,13 @@ const {
   resolveUrl,
   parseCseDirectory,
   parseMeDirectory,
+  parseAimlDirectory,
+  parseEeeDirectory,
+  parseCeDirectory,
+  parseHsDirectory,
+  parseStaffPhpDirectory,
+  findMatchesForFaculty,
+  mergeMatchedRecords,
 } = require('../src/services/faculty-web-scraper.service');
 
 describe('Faculty Web Scraper Service', () => {
@@ -70,5 +77,77 @@ describe('Faculty Web Scraper Service', () => {
     assert.equal(parsed[0].email, 'kadaru.s@gmail.com');
     assert.equal(parsed[0].profileSourceUrl, 'http://www.me.griet.ac.in/sunilkumarreddy.html');
     assert.equal(parsed[0].department, 'ME');
+  });
+
+  it('parses AIML directory HTML rows accurately', () => {
+    const sampleHtml = `
+      <table>
+        <tr>
+          <td>1.</td>
+          <td>Dr. G Karuna</td>
+          <td>Professor & Head</td>
+          <td>922</td>
+          <td>hod_aimle@griet.ac.in</td>
+          <td>85150331-125201</td>
+          <td><img src="images/gkaruna922.jpg"><a href="gkaruna922.html">Click</a></td>
+        </tr>
+      </table>
+    `;
+    const parsed = parseAimlDirectory(sampleHtml, 'http://www.aiml.griet.ac.in/', 'AIML');
+    assert.equal(parsed.length, 1);
+    assert.equal(parsed[0].name, 'Dr. G Karuna');
+    assert.equal(parsed[0].staffId, '922');
+    assert.equal(parsed[0].email, 'hod_aimle@griet.ac.in');
+    assert.equal(parsed[0].imageSourceUrl, 'http://www.aiml.griet.ac.in/images/gkaruna922.jpg');
+    assert.equal(parsed[0].profileSourceUrl, 'http://www.aiml.griet.ac.in/gkaruna922.html');
+    assert.equal(parsed[0].department, 'AIML');
+  });
+
+  it('parses EEE directory HTML rows accurately with PDF profile', () => {
+    const sampleHtml = `
+      <table>
+        <tr>
+          <td>1</td>
+          <td>Dr. J.Praveen</td>
+          <td>1079</td>
+          <td>Ph.D</td>
+          <td>Power Electronics</td>
+          <td>Professor & Principal</td>
+          <td><img src="images/faculty/JP.png"><a href="document/Dr. J.Praveen.pdf">Click</a></td>
+        </tr>
+      </table>
+    `;
+    const parsed = parseEeeDirectory(sampleHtml, 'http://www.eeedept.griet.ac.in/', 'EEE');
+    assert.equal(parsed.length, 1);
+    assert.equal(parsed[0].name, 'Dr. J.Praveen');
+    assert.equal(parsed[0].staffId, '1079');
+    assert.equal(parsed[0].qualification, 'Ph.D');
+    assert.equal(parsed[0].designation, 'Professor & Principal');
+    assert.equal(parsed[0].profileSourceUrl, 'http://www.eeedept.griet.ac.in/document/Dr.%20J.Praveen.pdf');
+    assert.equal(parsed[0].department, 'EEE');
+  });
+
+  it('parses Staff PHP directory accurately', () => {
+    const sampleHtml = `
+      <table>
+        <tr>
+          <td>1</td>
+          <td>85150330-182657</td>
+          <td>Dr. J.Praveen</td>
+          <td>Professor</td>
+          <td>Ph.D</td>
+          <td>EEE</td>
+          <td><img src="fac/Dr. J.Praveen.jpg" width="120" height="180"></td>
+        </tr>
+      </table>
+    `;
+    const parsed = parseStaffPhpDirectory(sampleHtml, 'https://www.griet.ac.in/');
+    assert.equal(parsed.length, 1);
+    assert.equal(parsed[0].name, 'Dr. J.Praveen');
+    assert.equal(parsed[0].staffId, '85150330-182657');
+    assert.equal(parsed[0].designation, 'Professor');
+    assert.equal(parsed[0].qualification, 'Ph.D');
+    assert.equal(parsed[0].department, 'EEE');
+    assert.equal(parsed[0].imageSourceUrl, 'https://www.griet.ac.in/fac/Dr.%20J.Praveen.jpg');
   });
 });

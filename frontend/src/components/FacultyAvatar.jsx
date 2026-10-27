@@ -12,13 +12,15 @@ function initials(name) {
 
 export default function FacultyAvatar({ faculty, size = 'small' }) {
   const [imgError, setImgError] = useState(false)
+  const imageSrc = faculty?.imageSourceUrl || faculty?.imageUrl
 
-  if (faculty?.imageUrl && !imgError) {
+  if (imageSrc && !imgError) {
     return (
       <img
         className={`faculty-avatar faculty-avatar--${size}`}
-        src={faculty.imageUrl}
-        alt=""
+        src={imageSrc}
+        alt={faculty?.name ? `${faculty.name} avatar` : ''}
+        referrerPolicy="no-referrer"
         onError={() => setImgError(true)}
         loading="lazy"
       />

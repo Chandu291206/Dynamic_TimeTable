@@ -9,6 +9,7 @@ import {
   updateFaculty,
 } from '../api/admin.js'
 import FacultyAvatar from '../components/FacultyAvatar.jsx'
+import { listStoredBrowserPdfs, processPdfQueue } from '../utils/facultyPdfStorage.js'
 
 export default function FacultyManagement() {
   const [facultyList, setFacultyList] = useState([])
@@ -19,6 +20,7 @@ export default function FacultyManagement() {
   const [scrapingId, setScrapingId] = useState(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [storedPdfIds, setStoredPdfIds] = useState([])
 
   // Form states
   const [showForm, setShowForm] = useState(false)
@@ -38,12 +40,14 @@ export default function FacultyManagement() {
     setLoading(true)
     setError('')
     try {
-      const [facRes, syncRes] = await Promise.all([
+      const [facRes, syncRes, browserPdfs] = await Promise.all([
         getAdminFaculty(),
         getAdminFacultySyncStatus().catch(() => null),
+        listStoredBrowserPdfs().catch(() => []),
       ])
       setFacultyList(facRes.data || [])
       setSyncStatus(syncRes?.data || null)
+      setStoredPdfIds(browserPdfs.map((p) => p.facultyId))
     } catch (err) {
       setError(err.message || 'Failed to load faculty records.')
     } finally {
@@ -82,8 +86,26 @@ export default function FacultyManagement() {
       const res = await scrapeFacultyWeb(id)
       const matched = res.data?.matchedCount ?? 0
       const updated = res.data?.updatedCount ?? 0
-      const photos = res.data?.imagesDownloaded ?? 0
-      setSuccess(`Web profile scraping finished: matched ${matched} faculty, updated ${updated} records, downloaded ${photos} photos.`)
+      const assigned = res.data?.imageUrlsAssigned ?? 0
+      const pdfQueue = res.data?.pdfQueue ?? []
+
+      if (pdfQueue.length > 0) {
+        setSuccess(
+          `HTML scraping complete (matched ${matched}, updated ${updated}). Now continuing with ${pdfQueue.length} queued PDF profile(s) into local browser storage...`
+        )
+        const pdfResult = await processPdfQueue(pdfQueue, (p) => {
+          setSuccess(
+            `Processing queued PDF profiles in browser storage (${p.current}/${p.total}): ${p.item.name}...`
+          )
+        })
+        setSuccess(
+          `Web scraping finished: matched ${matched} faculty, updated ${updated} records, assigned ${assigned} image URLs. Processed ${pdfResult.total} queued PDF profile(s) (synchronized ${pdfResult.valuesSent} extracted values and cleaned up temporary local browser storage).`
+        )
+      } else {
+        setSuccess(
+          `Web profile scraping finished: matched ${matched} faculty, updated ${updated} records, assigned ${assigned} image URLs.`
+        )
+      }
       await loadData()
     } catch (err) {
       setError(err.message || 'Web scraping failed.')
@@ -382,15 +404,31 @@ export default function FacultyManagement() {
                   <td>{faculty.email ? <a href={`mailto:${faculty.email}`} className="text-link">{faculty.email}</a> : '—'}</td>
                   <td>
                     {faculty.profileSourceUrl ? (
-                      <a
-                        href={faculty.profileSourceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="badge-profile-link"
-                        title={`Open official web profile for ${faculty.name}`}
-                      >
-                        🔗 Official Profile ↗
-                      </a>
+                      faculty.profileSourceUrl.toLowerCase().endsWith('.pdf') ? (
+                        <a
+                          href={faculty.profileSourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="badge-profile-link"
+                          title={
+                            storedPdfIds.includes(faculty.id)
+                              ? `Official PDF profile for ${faculty.name} (Stored in browser local storage)`
+                              : `Official PDF profile for ${faculty.name}`
+                          }
+                        >
+                          📄 PDF Profile {storedPdfIds.includes(faculty.id) ? '✓ (Browser Stored)' : '↗'}
+                        </a>
+                      ) : (
+                        <a
+                          href={faculty.profileSourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="badge-profile-link"
+                          title={`Open official web profile for ${faculty.name}`}
+                        >
+                          🔗 Official Profile ↗
+                        </a>
+                      )
                     ) : (
                       <span className="text-muted">—</span>
                     )}
