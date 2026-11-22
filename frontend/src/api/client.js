@@ -52,6 +52,7 @@ async function request(path, options = {}) {
     error.status = response.status
     error.code = data?.error?.code
     error.fields = data?.error?.fields
+    error.clashes = data?.error?.clashes
     error.data = data
     throw error
   }

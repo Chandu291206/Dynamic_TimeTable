@@ -6,6 +6,8 @@ const subjectController = require('../controllers/admin-subject.controller');
 const classController = require('../controllers/admin-class.controller');
 const slotController = require('../controllers/admin-slot.controller');
 const logController = require('../controllers/admin-log.controller');
+const periodController = require('../controllers/admin-period.controller');
+const designerController = require('../controllers/admin-designer.controller');
 const { authenticateJWT, requireAdmin } = require('../middleware/auth');
 
 router.use(authenticateJWT, requireAdmin);
@@ -42,5 +44,20 @@ router.get('/slots', slotController.list);
 router.post('/slots', slotController.create);
 router.put('/slots/:id', slotController.update);
 router.delete('/slots/:id', slotController.remove);
+router.get('/conflicts', slotController.conflictsReport);
+router.get('/faculty-busy-map', slotController.facultyBusyMap);
+router.get('/periods', periodController.list);
+router.put('/periods/:id', periodController.update);
+
+// Timetable Designer (Phase 5)
+router.post('/designer/drafts', designerController.createDraft);
+router.get('/designer/drafts', designerController.listDrafts);
+router.get('/designer/drafts/:draftId', designerController.getDraft);
+router.put('/designer/drafts/:draftId/cells', designerController.updateCell);
+router.delete('/designer/drafts/:draftId/cells', designerController.clearCell);
+router.get('/designer/drafts/:draftId/availability', designerController.getAvailability);
+router.post('/designer/drafts/:draftId/validate', designerController.validateDraft);
+router.post('/designer/drafts/:draftId/publish', designerController.publishDraft);
+router.delete('/designer/drafts/:draftId', designerController.discardDraft);
 
 module.exports = router;

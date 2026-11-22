@@ -15,8 +15,13 @@ function formatOverride(override) {
     date: override.date.toISOString().slice(0, 10),
     startTime: override.startTime,
     endTime: override.endTime,
-    subject: override.subject ? { id: override.subject.id, name: override.subject.name } : null,
-    faculty: override.faculty ? { id: override.faculty.id, name: override.faculty.name } : null,
+    room: override.room || null,
+    subjectId: override.subjectId,
+    facultyId: override.facultyId,
+    batchBFacultyId: override.batchBFacultyId || null,
+    subject: override.subject ? { id: override.subject.id, code: override.subject.code, name: override.subject.name, isBreak: override.subject.isBreak } : null,
+    faculty: override.faculty ? { id: override.faculty.id, name: override.faculty.name, staffId: override.faculty.staffId, department: override.faculty.department } : null,
+    batchBFaculty: override.batchBFaculty ? { id: override.batchBFaculty.id, name: override.batchBFaculty.name, staffId: override.batchBFaculty.staffId, department: override.batchBFaculty.department } : null,
     createdAt: override.createdAt,
   };
 }
@@ -36,10 +41,10 @@ async function dashboard(req, res) {
     prisma.timetableOverride.findMany({
       where: { classId: classRoom.id, date: { gte: today, lte: endDate } },
       orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
-      include: { subject: true, faculty: true },
+      include: { subject: true, faculty: true, batchBFaculty: true },
     }),
-    prisma.subject.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true } }),
-    prisma.faculty.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, department: true } }),
+    prisma.subject.findMany({ orderBy: { name: 'asc' }, select: { id: true, code: true, name: true, isBreak: true } }),
+    prisma.faculty.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, staffId: true, department: true } }),
   ]);
 
   return res.json({
@@ -67,7 +72,7 @@ async function upcomingOverrides(req, res) {
   const overrides = await prisma.timetableOverride.findMany({
     where: { classId: req.user.classId, date: { gte: today, lte: endDate } },
     orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
-    include: { subject: true, faculty: true },
+    include: { subject: true, faculty: true, batchBFaculty: true },
   });
   return res.json({ success: true, data: overrides.map(formatOverride) });
 }
@@ -78,7 +83,7 @@ async function createOverride(req, res) {
     return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid override data', fields: parsed.error.flatten().fieldErrors } });
   }
 
-  const { date: dateValue, startTime, endTime, subjectId = null, facultyId = null } = parsed.data;
+  const { date: dateValue, startTime, endTime, room = null, subjectId = null, facultyId = null, batchBFacultyId = null } = parsed.data;
   const date = parseDate(dateValue);
   if (!date) {
     return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Date must be valid' } });
@@ -92,14 +97,16 @@ async function createOverride(req, res) {
     return res.status(400).json({ success: false, error: { code: 'INVALID_OVERRIDE', message: 'Overrides require a scheduled Monday–Saturday timetable day' } });
   }
 
-  const [subject, faculty, recurringSlots, existingOverrides] = await Promise.all([
+  const [subject, faculty, batchBFaculty, recurringSlots, existingOverrides] = await Promise.all([
     subjectId ? prisma.subject.findUnique({ where: { id: subjectId } }) : null,
     facultyId ? prisma.faculty.findUnique({ where: { id: facultyId } }) : null,
+    batchBFacultyId ? prisma.faculty.findUnique({ where: { id: batchBFacultyId } }) : null,
     prisma.timetableSlot.findMany({ where: { classId: req.user.classId, day }, select: { startTime: true, endTime: true } }),
     prisma.timetableOverride.findMany({ where: { classId: req.user.classId, date }, select: { startTime: true, endTime: true } }),
   ]);
   if (subjectId && !subject) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Subject not found', fields: { subjectId: 'Choose an existing subject' } } });
   if (facultyId && !faculty) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Faculty member not found', fields: { facultyId: 'Choose an existing faculty member' } } });
+  if (batchBFacultyId && !batchBFaculty) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Batch B Faculty member not found', fields: { batchBFacultyId: 'Choose an existing faculty member' } } });
 
   const proposed = { startTime, endTime };
   if (!recurringSlots.some((slot) => timesOverlap(proposed, slot))) {
@@ -110,8 +117,8 @@ async function createOverride(req, res) {
   }
 
   const override = await prisma.timetableOverride.create({
-    data: { classId: req.user.classId, date, startTime, endTime, subjectId, facultyId },
-    include: { subject: true, faculty: true, class: true },
+    data: { classId: req.user.classId, date, startTime, endTime, room, subjectId, facultyId, batchBFacultyId },
+    include: { subject: true, faculty: true, batchBFaculty: true, class: true },
   });
   logger.audit('OVERRIDE_CREATED', { overrideId: override.id, classId: override.classId, date: dateValue, startTime, endTime, crUserId: req.user.id });
   await recordLog({

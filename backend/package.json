@@ -9,7 +9,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
-    "prisma:verify": "node prisma/verify.js",
+    "prisma:verify": "node scripts/verify-integrity.js",
     "test:public-smoke": "node scripts/smoke-public.js",
     "test:auth-smoke": "node scripts/smoke-auth.js",
     "test:cr-dashboard-smoke": "node scripts/smoke-cr-dashboard.js",
@@ -26,7 +26,7 @@
     "db:backup:sql": "node scripts/db-backup.js --format=sql",
     "db:restore": "node scripts/db-restore.js",
     "db:verify-backup": "node scripts/verify-backup.js",
-    "test": "node --test"
+    "test": "node --test test/*.test.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

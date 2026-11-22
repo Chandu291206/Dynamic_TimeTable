@@ -13,6 +13,7 @@ const workingHoursSchema = z.object({
 const timetableItemSchema = z.object({
   time: z.string().trim().min(5),
   periods: z.array(z.number().int().positive()).optional(),
+  room: z.string().trim().optional(),
   subject: z.string().trim().min(1),
 });
 
@@ -23,7 +24,7 @@ const facultyItemSchema = z.object({
 
 const courseDefinitionSchema = z.object({
   course_code: z.string().trim().min(1),
-  shortform: z.string().trim().min(1),
+  shortform: z.string().trim().optional(),
   course_name: z.string().trim().min(1),
   faculty: z.union([z.string().trim(), z.array(facultyItemSchema)]),
   staff_id: z.string().trim().optional(),

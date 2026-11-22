@@ -9,6 +9,8 @@ const {
   parseEeeDirectory,
   parseCeDirectory,
   parseHsDirectory,
+  parseDsDirectory,
+  parseCsbsDirectory,
   parseStaffPhpDirectory,
   findMatchesForFaculty,
   mergeMatchedRecords,
@@ -149,5 +151,103 @@ describe('Faculty Web Scraper Service', () => {
     assert.equal(parsed[0].qualification, 'Ph.D');
     assert.equal(parsed[0].department, 'EEE');
     assert.equal(parsed[0].imageSourceUrl, 'https://www.griet.ac.in/fac/Dr.%20J.Praveen.jpg');
+  });
+
+  it('parses DS directory HTML rows accurately', () => {
+    const sampleHtml = `
+      <table>
+        <tr>
+          <th>S.No.</th>
+          <th>Name</th>
+          <th>Designation</th>
+          <th>Faculty ID</th>
+          <th>Email Address</th>
+          <th>JNTUH ID</th>
+          <th>Photo</th>
+          <th>Profile Page</th>
+        </tr>
+        <tr>
+          <td>1</td>
+          <td>Dr.S. Govind Rao</td>
+          <td>Professor & HOD</td>
+          <td>486</td>
+          <td>govindsampathirao@gmail.com</td>
+          <td>01150330-195657</td>
+          <td><img src="images/govindrao.jpg" width="90" height="90"></td>
+          <td><a href="Govindrao.html">Click here...</a></td>
+        </tr>
+      </table>
+    `;
+    const parsed = parseDsDirectory(sampleHtml, 'http://www.ds.griet.ac.in/', 'DS');
+    assert.equal(parsed.length, 1);
+    assert.equal(parsed[0].name, 'Dr.S. Govind Rao');
+    assert.equal(parsed[0].staffId, '486');
+    assert.equal(parsed[0].designation, 'Professor & HOD');
+    assert.equal(parsed[0].email, 'govindsampathirao@gmail.com');
+    assert.equal(parsed[0].imageSourceUrl, 'http://www.ds.griet.ac.in/images/govindrao.jpg');
+    assert.equal(parsed[0].profileSourceUrl, 'http://www.ds.griet.ac.in/Govindrao.html');
+    assert.equal(parsed[0].department, 'DS');
+  });
+
+  it('parses CSBS directory HTML rows accurately', () => {
+    const sampleHtml = `
+      <table>
+        <tr>
+          <th>S.No.</th>
+          <th>Name</th>
+          <th>Designation</th>
+          <th>Faculty ID</th>
+          <th>Email Address</th>
+          <th>JNTUH ID</th>
+          <th>Photo</th>
+          <th>Profile Page</th>
+        </tr>
+        <tr>
+          <td>1</td>
+          <td>Dr. Mamidi Kiran Kumar</td>
+          <td>Associate Professor & Dean AAC</td>
+          <td>1610</td>
+          <td>kirankumar1610@grietcollege.com</td>
+          <td>8908-210628-151857</td>
+          <td><img src="images/kiran1610.jpg" width="90" height="90"></td>
+          <td><a href="kiran1610.html">Click here...</a></td>
+        </tr>
+      </table>
+    `;
+    const parsed = parseCsbsDirectory(sampleHtml, 'http://www.csbs.griet.ac.in/', 'CSBS');
+    assert.equal(parsed.length, 1);
+    assert.equal(parsed[0].name, 'Dr. Mamidi Kiran Kumar');
+    assert.equal(parsed[0].staffId, '1610');
+    assert.equal(parsed[0].designation, 'Associate Professor & Dean AAC');
+    assert.equal(parsed[0].email, 'kirankumar1610@grietcollege.com');
+    assert.equal(parsed[0].imageSourceUrl, 'http://www.csbs.griet.ac.in/images/kiran1610.jpg');
+    assert.equal(parsed[0].profileSourceUrl, 'http://www.csbs.griet.ac.in/kiran1610.html');
+    assert.equal(parsed[0].department, 'CSBS');
+  });
+
+  it('matches faculty strictly by staffId and NEVER by name alone', () => {
+    const dbFaculty1 = { id: 1, name: 'Dr. A. Kumar', staffId: '1001' };
+    const dbFaculty2 = { id: 2, name: 'Dr. A. Kumar', staffId: '1002' };
+
+    const scrapedList = [
+      { name: 'Dr. A. Kumar', staffId: '1001', designation: 'Professor' },
+      { name: 'Dr. A. Kumar', staffId: '1002', designation: 'Associate Professor' },
+      { name: 'Dr. A. Kumar', staffId: null, designation: 'Assistant Professor' },
+    ];
+
+    const match1 = findMatchesForFaculty(dbFaculty1, scrapedList);
+    assert.equal(match1.length, 1);
+    assert.equal(match1[0].staffId, '1001');
+    assert.equal(match1[0].designation, 'Professor');
+
+    const match2 = findMatchesForFaculty(dbFaculty2, scrapedList);
+    assert.equal(match2.length, 1);
+    assert.equal(match2[0].staffId, '1002');
+    assert.equal(match2[0].designation, 'Associate Professor');
+
+    // Faculty with no staffId in scrapedList does not match anyone
+    const dbFaculty3 = { id: 3, name: 'Dr. A. Kumar', staffId: '1003' };
+    const match3 = findMatchesForFaculty(dbFaculty3, scrapedList);
+    assert.equal(match3.length, 0);
   });
 });

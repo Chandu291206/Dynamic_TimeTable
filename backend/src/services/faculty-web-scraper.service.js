@@ -1,5 +1,6 @@
 const prisma = require('../config/database');
 const logger = require('../utils/logger');
+const { normalizeStaffId } = require('../utils/identity');
 
 const DIRECTORIES = [
   {
@@ -65,6 +66,20 @@ const DIRECTORIES = [
     dept: 'H & BS',
     parser: parseHsDirectory,
   },
+  {
+    name: 'DS',
+    url: 'http://www.ds.griet.ac.in/facultydirectory.html',
+    baseUrl: 'http://www.ds.griet.ac.in/',
+    dept: 'DS',
+    parser: parseDsDirectory,
+  },
+  {
+    name: 'CSBS',
+    url: 'http://www.csbs.griet.ac.in/facultydirectory.html',
+    baseUrl: 'http://www.csbs.griet.ac.in/',
+    dept: 'CSBS',
+    parser: parseCsbsDirectory,
+  },
 ];
 
 function normalizeName(str) {
@@ -104,7 +119,7 @@ function parseStaffPhpDirectory(html, baseUrl) {
       if (rawImgSrc && !rawImgSrc.toLowerCase().includes('logo')) {
         try {
           imgUrl = new URL(rawImgSrc, baseUrl || 'https://www.griet.ac.in/').href;
-        } catch {}
+        } catch { }
       }
 
       results.push({
@@ -402,6 +417,90 @@ function parseHsDirectory(html, baseUrl, dept) {
   return results;
 }
 
+function parseDsDirectory(html, baseUrl, dept) {
+  const trMatches = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
+  const results = [];
+
+  for (const tr of trMatches) {
+    const rowContent = tr[1];
+    const tds = [...rowContent.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((m) =>
+      m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    );
+
+    if (tds.length >= 4) {
+      const staffIdRaw = tds[3]?.match(/^\d+$/) ? tds[3] : null;
+      if (staffIdRaw && tds[1]) {
+        const rawImgSrc = rowContent.match(/<img[^>]+src=["']([^"']+)["']/i)?.[1];
+        const rawHref = rowContent.match(/<a[^>]+href=["']([^"']+)["']/i)?.[1];
+
+        const validImg = rawImgSrc && rawImgSrc !== 'images/' && !rawImgSrc.endsWith('/');
+        const validHref = rawHref && rawHref !== '#' && !rawHref.startsWith('javascript:');
+
+        let email = null;
+        if (tds[4]) {
+          const emailMatch = tds[4].match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+          if (emailMatch) {
+            email = emailMatch[0];
+          }
+        }
+
+        results.push({
+          name: tds[1],
+          designation: tds[2] || null,
+          staffId: staffIdRaw,
+          email,
+          imageSourceUrl: validImg ? resolveUrl(rawImgSrc, baseUrl) : null,
+          profileSourceUrl: validHref ? resolveUrl(rawHref, baseUrl) : null,
+          department: dept || 'DS',
+        });
+      }
+    }
+  }
+  return results;
+}
+
+function parseCsbsDirectory(html, baseUrl, dept) {
+  const trMatches = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
+  const results = [];
+
+  for (const tr of trMatches) {
+    const rowContent = tr[1];
+    const tds = [...rowContent.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((m) =>
+      m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    );
+
+    if (tds.length >= 4) {
+      const staffIdRaw = tds[3]?.match(/^\d+$/) ? tds[3] : null;
+      if (staffIdRaw && tds[1]) {
+        const rawImgSrc = rowContent.match(/<img[^>]+src=["']([^"']+)["']/i)?.[1];
+        const rawHref = rowContent.match(/<a[^>]+href=["']([^"']+)["']/i)?.[1];
+
+        const validImg = rawImgSrc && rawImgSrc !== 'images/' && !rawImgSrc.endsWith('/');
+        const validHref = rawHref && rawHref !== '#' && !rawHref.startsWith('javascript:');
+
+        let email = null;
+        if (tds[4]) {
+          const emailMatch = tds[4].match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+          if (emailMatch) {
+            email = emailMatch[0];
+          }
+        }
+
+        results.push({
+          name: tds[1],
+          designation: tds[2] || null,
+          staffId: staffIdRaw,
+          email,
+          imageSourceUrl: validImg ? resolveUrl(rawImgSrc, baseUrl) : null,
+          profileSourceUrl: validHref ? resolveUrl(rawHref, baseUrl) : null,
+          department: dept || 'CSBS',
+        });
+      }
+    }
+  }
+  return results;
+}
+
 async function fetchDirectoryFaculty() {
   const allFaculty = [];
   for (const dir of DIRECTORIES) {
@@ -425,17 +524,30 @@ async function fetchDirectoryFaculty() {
   return allFaculty;
 }
 
-async function inspectProfileForDetails(profileUrl) {
+async function inspectProfileForDetails(profileUrl, expectedStaffId = null) {
   if (!profileUrl || profileUrl.toLowerCase().endsWith('.pdf')) {
-    return { imageUrl: null, designation: null };
+    return { imageUrl: null, designation: null, mismatch: false };
   }
   try {
     const response = await fetch(profileUrl, {
       signal: AbortSignal.timeout(8000),
       headers: { 'user-agent': 'Timetable-Management-System/1.0' },
     });
-    if (!response.ok) return { imageUrl: null, designation: null };
+    if (!response.ok) return { imageUrl: null, designation: null, mismatch: false };
     const html = await response.text();
+
+    // Verify staff ID on profile page if present
+    if (expectedStaffId) {
+      const expectedNorm = normalizeStaffId(expectedStaffId);
+      const staffIdMatch = html.match(/(?:Staff\s*(?:ID|Code|No\.?)|Emp(?:loyee)?\s*(?:ID|Code|No\.?))[:\s]*([0-9A-Za-z-]+)/i);
+      if (staffIdMatch) {
+        const foundNorm = normalizeStaffId(staffIdMatch[1]);
+        if (foundNorm && foundNorm !== expectedNorm) {
+          logger.warn(`Profile URL ${profileUrl} staff ID mismatch: expected ${expectedNorm}, found ${foundNorm}`);
+          return { imageUrl: null, designation: null, mismatch: true, foundStaffId: foundNorm };
+        }
+      }
+    }
 
     let designation = null;
     const desigMatch = html.match(
@@ -460,45 +572,24 @@ async function inspectProfileForDetails(profileUrl) {
       }
     }
 
-    return { imageUrl, designation };
+    return { imageUrl, designation, mismatch: false };
   } catch {
-    return { imageUrl: null, designation: null };
+    return { imageUrl: null, designation: null, mismatch: false };
   }
 }
 
 function findMatchesForFaculty(dbFaculty, scrapedList) {
   const matches = [];
-  const dbNorm = normalizeName(dbFaculty.name);
+  if (!dbFaculty || !dbFaculty.staffId) return matches;
+  const dId = normalizeStaffId(dbFaculty.staffId);
+  if (!dId) return matches;
 
   for (const s of scrapedList) {
-    let matched = false;
-
-    // 1. Staff ID match
-    if (dbFaculty.staffId && s.staffId) {
-      const sId = String(s.staffId).trim();
-      const dId = String(dbFaculty.staffId).trim();
+    if (s && s.staffId) {
+      const sId = normalizeStaffId(s.staffId);
       if (sId === dId) {
-        matched = true;
+        matches.push(s);
       }
-    }
-
-    // 2. Normalized name match
-    if (!matched && dbNorm) {
-      const sNorm = normalizeName(s.name);
-      if (sNorm && sNorm === dbNorm) {
-        matched = true;
-      } else if (
-        sNorm &&
-        dbNorm.length > 5 &&
-        sNorm.length > 5 &&
-        (sNorm.includes(dbNorm) || dbNorm.includes(sNorm))
-      ) {
-        matched = true;
-      }
-    }
-
-    if (matched) {
-      matches.push(s);
     }
   }
 
@@ -590,12 +681,17 @@ async function scrapeAndUpdateFaculty({ facultyId = null } = {}) {
 
     // If profile is an HTML page (not PDF), inspect it for deeper image/designation details if missing
     if (finalProfileUrl && !isPdfProfile && (!finalImageUrl || !extractedDesig || extractedDesig.toLowerCase() === 'faculty')) {
-      const deepDetails = await inspectProfileForDetails(finalProfileUrl);
-      if (!finalImageUrl && deepDetails.imageUrl) {
-        finalImageUrl = deepDetails.imageUrl;
-      }
-      if ((!extractedDesig || extractedDesig.toLowerCase() === 'faculty') && deepDetails.designation) {
-        extractedDesig = deepDetails.designation;
+      const deepDetails = await inspectProfileForDetails(finalProfileUrl, fac.staffId);
+      if (deepDetails.mismatch) {
+        // Discard image from mismatched profile and log issue
+        logger.warn(`Discarding profile image for ${fac.name} due to staffId mismatch on profile page`);
+      } else {
+        if (!finalImageUrl && deepDetails.imageUrl) {
+          finalImageUrl = deepDetails.imageUrl;
+        }
+        if ((!extractedDesig || extractedDesig.toLowerCase() === 'faculty') && deepDetails.designation) {
+          extractedDesig = deepDetails.designation;
+        }
       }
     }
 
@@ -678,6 +774,8 @@ module.exports = {
   parseEeeDirectory,
   parseCeDirectory,
   parseHsDirectory,
+  parseDsDirectory,
+  parseCsbsDirectory,
   findMatchesForFaculty,
   mergeMatchedRecords,
 };

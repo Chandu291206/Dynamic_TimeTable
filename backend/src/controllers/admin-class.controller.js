@@ -8,7 +8,12 @@ const logger = require('../utils/logger');
 const idSchema = z.coerce.number().int().positive();
 
 function normalizeClass(input) {
-  return { year: input.year, branch: input.branch.replace(/\s+/g, ' ').toUpperCase(), section: input.section.replace(/\s+/g, ' ').toUpperCase() };
+  return {
+    year: input.year,
+    branch: input.branch.replace(/\s+/g, ' ').toUpperCase(),
+    section: input.section.replace(/\s+/g, ' ').toUpperCase(),
+    academicYear: (input.academicYear || '2026-27').replace(/\s+/g, ' ').toUpperCase(),
+  };
 }
 
 function serialize(classRoom) {
@@ -40,7 +45,9 @@ async function create(req, res) {
   const parsed = classSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid class data', fields: parsed.error.flatten().fieldErrors } });
   const data = normalizeClass(parsed.data);
-  if (await prisma.classRoom.findUnique({ where: { year_branch_section: data } })) return res.status(409).json({ success: false, error: { code: 'CLASS_EXISTS', message: 'This class already exists' } });
+  if (await prisma.classRoom.findUnique({ where: { year_branch_section_academicYear: data } })) {
+    return res.status(409).json({ success: false, error: { code: 'CLASS_EXISTS', message: 'This class already exists for this academic year' } });
+  }
   const classRoom = await prisma.classRoom.create({ data });
   logger.audit('CLASS_CREATED', { classId: classRoom.id, label: classLabel(classRoom), adminUserId: req.user.id });
   return res.status(201).json({ success: true, data: serialize(classRoom) });
@@ -52,8 +59,8 @@ async function update(req, res) {
   if (!parsed.success) return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid class data', fields: parsed.error.flatten().fieldErrors } });
   const data = normalizeClass(parsed.data);
   if (!(await prisma.classRoom.findUnique({ where: { id } }))) return res.status(404).json({ success: false, error: { code: 'CLASS_NOT_FOUND', message: 'Class not found' } });
-  const existing = await prisma.classRoom.findUnique({ where: { year_branch_section: data } });
-  if (existing && existing.id !== id) return res.status(409).json({ success: false, error: { code: 'CLASS_EXISTS', message: 'This class already exists' } });
+  const existing = await prisma.classRoom.findUnique({ where: { year_branch_section_academicYear: data } });
+  if (existing && existing.id !== id) return res.status(409).json({ success: false, error: { code: 'CLASS_EXISTS', message: 'This class already exists for this academic year' } });
   const classRoom = await prisma.classRoom.update({ where: { id }, data });
   logger.audit('CLASS_UPDATED', { classId: classRoom.id, label: classLabel(classRoom), adminUserId: req.user.id });
   return res.json({ success: true, data: serialize(classRoom) });
@@ -227,6 +234,16 @@ async function uploadTimetable(req, res) {
       data: serialize(classRoom),
     });
   } catch (err) {
+    if (err.name === 'ClashError' || err.code === 'CLASH_DETECTED') {
+      return res.status(409).json({
+        success: false,
+        error: {
+          code: 'CLASH_DETECTED',
+          message: err.message,
+          clashes: err.clashes || [],
+        },
+      });
+    }
     logger.error('Failed to import timetable', { error: err.message, stack: err.stack });
     return res.status(500).json({
       success: false,

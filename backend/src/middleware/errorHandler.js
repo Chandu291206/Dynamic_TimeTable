@@ -40,6 +40,9 @@ function errorHandler(error, req, res, next) { // eslint-disable-line no-unused-
   if (error.fields) {
     payload.fields = error.fields;
   }
+  if (error.clashes) {
+    payload.clashes = error.clashes;
+  }
 
   return res.status(status).json({
     success: false,

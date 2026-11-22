@@ -5,6 +5,7 @@ import Navbar from './components/Navbar.jsx'
 import { ToastProvider } from './components/Toast.jsx'
 import AdminDashboard from './pages/AdminDashboard.jsx'
 import AdminLogin from './pages/AdminLogin.jsx'
+import DesignerPage from './pages/DesignerPage.jsx'
 import CRDashboard from './pages/CRDashboard.jsx'
 import CRLogin from './pages/CRLogin.jsx'
 import AllTimetablesPage from './pages/AllTimetablesPage.jsx'
@@ -28,6 +29,8 @@ function App() {
               <Route path="/cr/dashboard" element={<CRDashboard />} />
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/admin/designer" element={<DesignerPage />} />
+              <Route path="/admin/designer/:classId" element={<DesignerPage />} />
               <Route path="*" element={<PlaceholderPage kind="notFound" />} />
             </Routes>
             </ErrorBoundary>

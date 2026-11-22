@@ -8,9 +8,13 @@ const slotSchema = z.object({
   day: z.coerce.number().int().min(0, 'Day must be between 0 (Monday) and 5 (Saturday)').max(5, 'Day must be between 0 (Monday) and 5 (Saturday)'),
   startTime: z.string().regex(TIME_PATTERN, 'Start time must use HH:MM format'),
   endTime: z.string().regex(TIME_PATTERN, 'End time must use HH:MM format'),
+  room: z.string().trim().max(50).nullable().optional(),
+  startPeriodId: optionalId,
+  endPeriodId: optionalId,
   subjectId: optionalId,
   facultyId: optionalId,
-}).refine((data) => {
+  batchBFacultyId: optionalId,
+}).strict().refine((data) => {
   const start = timeToMinutes(data.startTime);
   const end = timeToMinutes(data.endTime);
   return start !== null && end !== null && start < end;

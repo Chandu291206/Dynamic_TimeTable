@@ -6,9 +6,11 @@ import FacultyManagement from '../admin/FacultyManagement.jsx'
 import SlotManagement from '../admin/SlotManagement.jsx'
 import SubjectManagement from '../admin/SubjectManagement.jsx'
 import TimetableLogs from '../admin/TimetableLogs.jsx'
+import TimetableDesigner from '../admin/TimetableDesigner.jsx'
 import useAuth from '../hooks/useAuth.js'
 
 const TABS = [
+  { id: 'designer', label: 'Timetable Designer', icon: '🎨' },
   { id: 'faculty', label: 'Faculty Directory', icon: '👥' },
   { id: 'subjects', label: 'Subjects', icon: '📚' },
   { id: 'classes', label: 'Classes', icon: '🏛' },
@@ -90,6 +92,7 @@ export default function AdminDashboard() {
 
         {/* Tab Content Panel */}
         <main className="admin-tab-content" role="tabpanel">
+          {activeTab === 'designer' && <TimetableDesigner />}
           {activeTab === 'faculty' && <FacultyManagement />}
           {activeTab === 'subjects' && <SubjectManagement />}
           {activeTab === 'classes' && <ClassManagement />}

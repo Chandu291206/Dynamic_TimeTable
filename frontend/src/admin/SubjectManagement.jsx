@@ -5,8 +5,10 @@ export default function SubjectManagement() {
   const [subjects, setSubjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState('')
+  const [code, setCode] = useState('')
   const [editingSubject, setEditingSubject] = useState(null)
   const [editName, setEditName] = useState('')
+  const [editCode, setEditCode] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -31,14 +33,16 @@ export default function SubjectManagement() {
   const handleAddSubject = async (event) => {
     event.preventDefault()
     if (!name.trim()) return
+    const cleanCode = (code || name).trim().toUpperCase()
 
     setSubmitting(true)
     setError('')
     setSuccess('')
     try {
-      await createSubject({ name: name.trim() })
-      setSuccess(`Subject '${name.trim()}' added successfully.`)
+      await createSubject({ name: name.trim(), code: cleanCode })
+      setSuccess(`Subject '${name.trim()}' (${cleanCode}) added successfully.`)
       setName('')
+      setCode('')
       await loadSubjects()
     } catch (err) {
       setError(err.message || 'Could not add subject.')
@@ -50,6 +54,7 @@ export default function SubjectManagement() {
   const handleStartEdit = (subject) => {
     setEditingSubject(subject)
     setEditName(subject.name)
+    setEditCode(subject.code || '')
     setError('')
     setSuccess('')
   }
@@ -62,7 +67,10 @@ export default function SubjectManagement() {
     setError('')
     setSuccess('')
     try {
-      await updateSubject(editingSubject.id, { name: editName.trim() })
+      await updateSubject(editingSubject.id, {
+        name: editName.trim(),
+        code: editCode.trim().toUpperCase() || undefined,
+      })
       setSuccess(`Subject updated to '${editName.trim()}'.`)
       setEditingSubject(null)
       await loadSubjects()
@@ -129,6 +137,18 @@ export default function SubjectManagement() {
               </header>
               <form onSubmit={handleUpdateSubject} className="admin-form">
                 <div className="form-group">
+                  <label htmlFor="edit-subject-code" className="field-label">Subject Code *</label>
+                  <input
+                    id="edit-subject-code"
+                    type="text"
+                    className="text-input"
+                    value={editCode}
+                    onChange={(e) => setEditCode(e.target.value)}
+                    required
+                    disabled={submitting}
+                  />
+                </div>
+                <div className="form-group">
                   <label htmlFor="edit-subject-name" className="field-label">Subject Name *</label>
                   <input
                     id="edit-subject-name"
@@ -154,12 +174,25 @@ export default function SubjectManagement() {
               </header>
               <form onSubmit={handleAddSubject} className="admin-form">
                 <div className="form-group">
+                  <label htmlFor="add-subject-code" className="field-label">Subject Code *</label>
+                  <input
+                    id="add-subject-code"
+                    type="text"
+                    className="text-input"
+                    placeholder="e.g. CS301, CN, FLAT"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    required
+                    disabled={submitting}
+                  />
+                </div>
+                <div className="form-group">
                   <label htmlFor="add-subject-name" className="field-label">Subject Name *</label>
                   <input
                     id="add-subject-name"
                     type="text"
                     className="text-input"
-                    placeholder="e.g. FLAT, CN, AI LAB"
+                    placeholder="e.g. Computer Networks"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
@@ -199,6 +232,7 @@ export default function SubjectManagement() {
                   <thead>
                     <tr>
                       <th scope="col">ID</th>
+                      <th scope="col">Code</th>
                       <th scope="col">Subject Name</th>
                       <th scope="col" className="text-right">Actions</th>
                     </tr>
@@ -207,7 +241,11 @@ export default function SubjectManagement() {
                     {subjects.map((sub) => (
                       <tr key={sub.id}>
                         <td><code>#{sub.id}</code></td>
-                        <td><b>{sub.name}</b></td>
+                        <td><code>{sub.code || '—'}</code></td>
+                        <td>
+                          <b>{sub.name}</b>
+                          {sub.isBreak && <span className="badge-count" style={{ marginLeft: '0.5rem', background: '#e0e7ff', color: '#3730a3' }}>Break</span>}
+                        </td>
                         <td className="text-right table-actions">
                           <button
                             type="button"

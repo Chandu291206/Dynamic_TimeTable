@@ -2,6 +2,7 @@ const router = require('express').Router();
 const controller = require('../controllers/public.controller');
 
 router.get('/classes', controller.getClasses);
+router.get('/periods', controller.getPeriods);
 router.get('/timetable/:classId/weekly', controller.getWeeklyTimetable);
 router.get('/timetable/:classId/json', controller.getTimetableJson);
 router.get('/timetable/:classId', controller.getTimetable);

@@ -32,7 +32,6 @@ export default function FacultyManagement() {
     qualification: '',
     staffId: '',
     email: '',
-    phone: '',
   })
   const [submitting, setSubmitting] = useState(false)
 
@@ -124,7 +123,6 @@ export default function FacultyManagement() {
       qualification: '',
       staffId: '',
       email: '',
-      phone: '',
     })
     setShowForm(true)
   }
@@ -138,7 +136,6 @@ export default function FacultyManagement() {
       qualification: faculty.qualification || '',
       staffId: faculty.staffId || '',
       email: faculty.email || '',
-      phone: faculty.phone || '',
     })
     setShowForm(true)
   }
@@ -147,6 +144,10 @@ export default function FacultyManagement() {
     event.preventDefault()
     if (!formData.name.trim()) {
       setError('Faculty name is required.')
+      return
+    }
+    if (!formData.staffId.trim()) {
+      setError('Staff ID is required.')
       return
     }
 
@@ -220,16 +221,33 @@ export default function FacultyManagement() {
 
       {/* Sync Status Banner */}
       {syncStatus && (
-        <div className="sync-status-strip">
-          <span className="sync-dot" data-status={syncStatus.status} />
-          <span>
-            <b>Last Sync:</b> {syncStatus.status}
-            {syncStatus.finishedAt && ` · ${new Date(syncStatus.finishedAt).toLocaleString()}`}
-          </span>
-          <span className="sync-counts">
-            Created: <b>{syncStatus.created ?? 0}</b> | Updated: <b>{syncStatus.updated ?? 0}</b> | Unchanged: <b>{syncStatus.unchanged ?? 0}</b> | Failed: <b>{syncStatus.failed ?? 0}</b>
-          </span>
-        </div>
+        <>
+          <div className="sync-status-strip">
+            <span className="sync-dot" data-status={syncStatus.status} />
+            <span>
+              <b>Last Sync:</b> {syncStatus.status}
+              {syncStatus.finishedAt && ` · ${new Date(syncStatus.finishedAt).toLocaleString()}`}
+            </span>
+            <span className="sync-counts">
+              Created: <b>{syncStatus.created ?? 0}</b> | Updated: <b>{syncStatus.updated ?? 0}</b> | Unchanged: <b>{syncStatus.unchanged ?? 0}</b> | Skipped: <b>{syncStatus.skipped ?? 0}</b> | Failed: <b>{syncStatus.failed ?? 0}</b>
+            </span>
+          </div>
+          {syncStatus?.issues && syncStatus.issues.length > 0 && (
+            <div className="form-warning-alert" role="status" style={{ margin: '0.75rem 0', padding: '0.75rem 1rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '6px' }}>
+              <b>⚠ Sync Review Notice:</b> {syncStatus.issues.length} item(s) skipped or flagged during last sync:
+              <ul style={{ margin: '0.5rem 0 0 1.25rem', fontSize: '0.875rem' }}>
+                {syncStatus.issues.slice(0, 5).map((issue, idx) => (
+                  <li key={idx}>
+                    <code>{issue.type}</code>: {issue.name || issue.staffId || 'Unknown'} — {issue.reason || issue.error || 'Review needed'}
+                  </li>
+                ))}
+                {syncStatus.issues.length > 5 && (
+                  <li>...and {syncStatus.issues.length - 5} more issues.</li>
+                )}
+              </ul>
+            </div>
+          )}
+        </>
       )}
 
       {error && (
@@ -312,7 +330,7 @@ export default function FacultyManagement() {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="field-label" htmlFor="fac-staffid">Staff ID</label>
+                  <label className="field-label" htmlFor="fac-staffid">Staff ID *</label>
                   <input
                     id="fac-staffid"
                     type="text"
@@ -320,6 +338,7 @@ export default function FacultyManagement() {
                     placeholder="e.g. 1542"
                     value={formData.staffId}
                     onChange={(e) => setFormData({ ...formData, staffId: e.target.value })}
+                    required
                     disabled={submitting}
                   />
                 </div>
@@ -332,17 +351,6 @@ export default function FacultyManagement() {
                     placeholder="name@griet.ac.in"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    disabled={submitting}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="field-label" htmlFor="fac-phone">Phone</label>
-                  <input
-                    id="fac-phone"
-                    type="tel"
-                    className="text-input"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     disabled={submitting}
                   />
                 </div>

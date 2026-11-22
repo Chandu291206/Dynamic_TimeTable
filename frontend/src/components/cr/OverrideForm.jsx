@@ -182,7 +182,9 @@ export default function OverrideForm({ subjects = [], faculty = [], onCreated })
             >
               <option value="">-- No subject / Self-study --</option>
               {subjects.map((sub) => (
-                <option key={sub.id} value={sub.id}>{sub.name}</option>
+                <option key={sub.id} value={sub.id}>
+                  {sub.code ? `${sub.code} — ${sub.name}` : sub.name}
+                </option>
               ))}
             </select>
           </div>
@@ -201,7 +203,7 @@ export default function OverrideForm({ subjects = [], faculty = [], onCreated })
               <option value="">-- No faculty / TBA --</option>
               {faculty.map((fac) => (
                 <option key={fac.id} value={fac.id}>
-                  {fac.name} {fac.department ? `(${fac.department})` : ''}
+                  {fac.name} {fac.staffId ? `— ${fac.staffId}` : ''} {fac.department ? `(${fac.department})` : ''}
                 </option>
               ))}
             </select>

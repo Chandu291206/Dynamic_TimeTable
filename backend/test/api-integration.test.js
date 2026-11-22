@@ -437,3 +437,234 @@ test('DELETE /api/admin/classes/:id/timetable clears timetable and DELETE /class
   assert.equal(delClassRes.status, 204);
 });
 
+// ============================================================================
+// 5. Phase 3 ID-Only Contract & Same-Name Faculty Acceptance Tests
+// ============================================================================
+
+test('POST /api/admin/slots rejects legacy text keys (subjectName, facultyName, className) with 400', async () => {
+  assert.ok(adminToken, 'Admin token must be available');
+  const adminHeaders = { authorization: `Bearer ${adminToken}` };
+
+  const res = await jsonFetch('/admin/slots', {
+    method: 'POST',
+    headers: adminHeaders,
+    body: {
+      classId: 1,
+      day: 1,
+      startTime: '09:00',
+      endTime: '09:50',
+      subjectName: 'Operating Systems', // Banned key
+    },
+  });
+
+  assert.equal(res.status, 400);
+  assert.equal(res.body.success, false);
+  assert.equal(res.body.error.code, 'VALIDATION_ERROR');
+});
+
+test('POST /api/cr/overrides rejects legacy text keys (subjectName, facultyName) with 400', { skip: 'CR features commented out' }, async () => {
+  assert.ok(crToken, 'CR token must be available');
+  const crHeaders = { authorization: `Bearer ${crToken}` };
+
+  const res = await jsonFetch('/cr/overrides', {
+    method: 'POST',
+    headers: crHeaders,
+    body: {
+      date: '2030-01-08',
+      startTime: '09:00',
+      endTime: '09:50',
+      facultyName: 'Dr. John', // Banned key
+    },
+  });
+
+  assert.equal(res.status, 400);
+  assert.equal(res.body.success, false);
+  assert.equal(res.body.error.code, 'VALIDATION_ERROR');
+});
+
+test('Phase 3 Acceptance: Same-name faculty with distinct staffId are isolated across slots and overrides', async () => {
+  assert.ok(adminToken, 'Admin token must be available');
+  const adminHeaders = { authorization: `Bearer ${adminToken}` };
+
+  const uniqueSuffix = Date.now().toString().slice(-5);
+  const commonName = `Dr. Suresh Sharma ${uniqueSuffix}`;
+  const staffIdA = `STF_A_${uniqueSuffix}`;
+  const staffIdB = `STF_B_${uniqueSuffix}`;
+
+  // 1. Create two faculty members with IDENTICAL names but distinct staff IDs
+  const f1Res = await jsonFetch('/admin/faculty', {
+    method: 'POST',
+    headers: adminHeaders,
+    body: { name: commonName, staffId: staffIdA, department: 'CSE' },
+  });
+  assert.equal(f1Res.status, 201, `Failed to create Faculty A: ${JSON.stringify(f1Res.body)}`);
+  const facultyA = f1Res.body.data;
+
+  const f2Res = await jsonFetch('/admin/faculty', {
+    method: 'POST',
+    headers: adminHeaders,
+    body: { name: commonName, staffId: staffIdB, department: 'CSE' },
+  });
+  assert.equal(f2Res.status, 201, `Failed to create Faculty B: ${JSON.stringify(f2Res.body)}`);
+  const facultyB = f2Res.body.data;
+
+  assert.notEqual(facultyA.id, facultyB.id, 'Both faculty must have distinct numeric IDs');
+  assert.equal(facultyA.name, facultyB.name, 'Faculty names must be identical');
+  assert.equal(facultyA.staffId, staffIdA);
+  assert.equal(facultyB.staffId, staffIdB);
+
+  // 2. Create a temporary class and a subject
+  const classRes = await jsonFetch('/admin/classes', {
+    method: 'POST',
+    headers: adminHeaders,
+    body: { year: 3, branch: 'CSE', section: `SN${uniqueSuffix.slice(-3)}` },
+  });
+  assert.equal(classRes.status, 201);
+  const classId = classRes.body.data.id;
+
+  const subjRes = await jsonFetch('/admin/subjects', {
+    method: 'POST',
+    headers: adminHeaders,
+    body: { name: `Lab Course ${uniqueSuffix}`, code: `LAB${uniqueSuffix}` },
+  });
+  assert.equal(subjRes.status, 201);
+  const subjectId = subjRes.body.data.id;
+
+  let slotId;
+  try {
+    // 3. Create a slot assigning Faculty A as Batch A faculty and Faculty B as Batch B faculty
+    const slotRes = await jsonFetch('/admin/slots', {
+      method: 'POST',
+      headers: adminHeaders,
+      body: {
+        classId,
+        day: 2,
+        startTime: '13:45',
+        endTime: '15:25',
+        subjectId,
+        facultyId: facultyA.id,
+        batchBFacultyId: facultyB.id,
+      },
+    });
+    assert.equal(slotRes.status, 201, `Slot creation failed: ${JSON.stringify(slotRes.body)}`);
+    slotId = slotRes.body.data.id;
+
+    // 4. Retrieve slots for class and verify both faculty maintain their precise identity
+    const getSlotsRes = await jsonFetch(`/admin/slots?classId=${classId}`, { headers: adminHeaders });
+    assert.equal(getSlotsRes.status, 200);
+    const createdSlot = getSlotsRes.body.data.find((s) => s.id === slotId);
+    assert.ok(createdSlot, 'Slot must be retrieved');
+    assert.equal(createdSlot.faculty.id, facultyA.id);
+    assert.equal(createdSlot.faculty.staffId, staffIdA);
+    assert.equal(createdSlot.batchBFaculty.id, facultyB.id);
+    assert.equal(createdSlot.batchBFaculty.staffId, staffIdB);
+  } finally {
+    // Clean up
+    if (slotId) {
+      await jsonFetch(`/admin/slots/${slotId}`, { method: 'DELETE', headers: adminHeaders });
+    }
+    await jsonFetch(`/admin/classes/${classId}`, { method: 'DELETE', headers: adminHeaders });
+    await jsonFetch(`/admin/subjects/${subjectId}`, { method: 'DELETE', headers: adminHeaders });
+    await jsonFetch(`/admin/faculty/${facultyA.id}`, { method: 'DELETE', headers: adminHeaders });
+    await jsonFetch(`/admin/faculty/${facultyB.id}`, { method: 'DELETE', headers: adminHeaders });
+  }
+});
+
+// ============================================================================
+// 6. Phase 4 Clash Engine Integration & Advisory Locking Tests
+// ============================================================================
+
+test('GET /api/admin/conflicts returns live conflicts report', async () => {
+  assert.ok(adminToken, 'Admin token must be available');
+  const res = await jsonFetch('/admin/conflicts', {
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.success, true);
+  assert.ok(typeof res.body.data.totalClashes === 'number');
+  assert.ok(Array.isArray(res.body.data.clashes));
+});
+
+test('GET /api/admin/faculty-busy-map returns faculty busy schedule', async () => {
+  assert.ok(adminToken, 'Admin token must be available');
+  const res = await jsonFetch('/admin/faculty-busy-map', {
+    headers: { authorization: `Bearer ${adminToken}` },
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.success, true);
+  assert.ok(typeof res.body.data === 'object');
+});
+
+test('Phase 4 Acceptance: Clash prevention on POST /api/admin/slots', async () => {
+  assert.ok(adminToken, 'Admin token must be available');
+  const adminHeaders = { authorization: `Bearer ${adminToken}` };
+  const suffix = Date.now().toString().slice(-4);
+
+  // Setup 2 classes and 1 faculty
+  const [c1Res, c2Res, fRes] = await Promise.all([
+    jsonFetch('/admin/classes', { method: 'POST', headers: adminHeaders, body: { year: 3, branch: 'CSE', section: `C1${suffix}` } }),
+    jsonFetch('/admin/classes', { method: 'POST', headers: adminHeaders, body: { year: 3, branch: 'AIML', section: `C2${suffix}` } }),
+    jsonFetch('/admin/faculty', { method: 'POST', headers: adminHeaders, body: { name: `Prof. Clash ${suffix}`, staffId: `STF_CLASH_${suffix}` } }),
+  ]);
+
+  assert.equal(c1Res.status, 201);
+  assert.equal(c2Res.status, 201);
+  assert.equal(fRes.status, 201);
+
+  const class1Id = c1Res.body.data.id;
+  const class2Id = c2Res.body.data.id;
+  const facultyId = fRes.body.data.id;
+
+  let slot1Id;
+  let adjacentSlotId;
+
+  try {
+    // 1. Create base slot for Class 1 (09:00 - 09:50, Day 1)
+    const slot1Res = await jsonFetch('/admin/slots', {
+      method: 'POST',
+      headers: adminHeaders,
+      body: { classId: class1Id, day: 1, startTime: '09:00', endTime: '09:50', facultyId },
+    });
+    assert.equal(slot1Res.status, 201);
+    slot1Id = slot1Res.body.data.id;
+
+    // 2. Attempt to create overlapping slot in SAME class -> 409 CLASS_OVERLAP
+    const sameClassRes = await jsonFetch('/admin/slots', {
+      method: 'POST',
+      headers: adminHeaders,
+      body: { classId: class1Id, day: 1, startTime: '09:30', endTime: '10:20' },
+    });
+    assert.equal(sameClassRes.status, 409);
+    assert.equal(sameClassRes.body.error.code, 'CLASH_DETECTED');
+    assert.ok(sameClassRes.body.error.clashes.some((c) => c.type === 'CLASS_OVERLAP'));
+
+    // 3. Attempt to create overlapping slot in DIFFERENT class with SAME faculty -> 409 FACULTY_DOUBLE_BOOKED
+    const diffClassRes = await jsonFetch('/admin/slots', {
+      method: 'POST',
+      headers: adminHeaders,
+      body: { classId: class2Id, day: 1, startTime: '09:00', endTime: '09:50', facultyId },
+    });
+    assert.equal(diffClassRes.status, 409);
+    assert.equal(diffClassRes.body.error.code, 'CLASH_DETECTED');
+    assert.ok(diffClassRes.body.error.clashes.some((c) => c.type === 'FACULTY_DOUBLE_BOOKED'));
+
+    // 4. Create ADJACENT slot (touching boundary 09:50 - 10:40) with same faculty -> 201 Created
+    const adjacentRes = await jsonFetch('/admin/slots', {
+      method: 'POST',
+      headers: adminHeaders,
+      body: { classId: class2Id, day: 1, startTime: '09:50', endTime: '10:40', facultyId },
+    });
+    assert.equal(adjacentRes.status, 201, `Adjacent slot should succeed: ${JSON.stringify(adjacentRes.body)}`);
+    adjacentSlotId = adjacentRes.body.data.id;
+  } finally {
+    if (adjacentSlotId) await jsonFetch(`/admin/slots/${adjacentSlotId}`, { method: 'DELETE', headers: adminHeaders });
+    if (slot1Id) await jsonFetch(`/admin/slots/${slot1Id}`, { method: 'DELETE', headers: adminHeaders });
+    await jsonFetch(`/admin/classes/${class1Id}`, { method: 'DELETE', headers: adminHeaders });
+    await jsonFetch(`/admin/classes/${class2Id}`, { method: 'DELETE', headers: adminHeaders });
+    await jsonFetch(`/admin/faculty/${facultyId}`, { method: 'DELETE', headers: adminHeaders });
+  }
+});
+
+

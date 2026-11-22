@@ -7,14 +7,14 @@ const createCRSchema = z.object({
   password: z.string().min(6).max(200),
   classId: z.coerce.number().int().positive(),
   isActive: z.boolean().optional().default(true),
-});
+}).strict();
 
 const updateCRSchema = z.object({
   username: z.string().trim().min(3).max(100).optional(),
   password: z.string().min(6).max(200).optional(),
   isActive: z.boolean().optional(),
-}).refine((value) => Object.keys(value).length > 0, 'Provide at least one field to update');
+}).strict().refine((value) => Object.keys(value).length > 0, 'Provide at least one field to update');
 
-const assignCRClassSchema = z.object({ classId: classIdSchema });
+const assignCRClassSchema = z.object({ classId: classIdSchema }).strict();
 
 module.exports = { createCRSchema, updateCRSchema, assignCRClassSchema };

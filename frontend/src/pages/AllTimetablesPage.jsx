@@ -127,7 +127,7 @@ export default function AllTimetablesPage() {
               <span className="kicker">Institutional Catalogue</span>
               <span className="today-badge">{classes.length} Published Schedules</span>
             </div>
-            <h1 id="all-timetables-heading">All Timetables</h1>
+            <h1 id="all-timetables-heading"><center>GRIET Timetables</center></h1>
             <p className="weekday-display">
               Official academic timetable matrix organized by Year, Branch, and Section.
             </p>

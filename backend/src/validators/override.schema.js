@@ -9,9 +9,11 @@ const createOverrideSchema = z.object({
     .refine((val) => parseDate(val) !== null, 'Date must be a valid calendar date'),
   startTime: z.string().regex(TIME_PATTERN, 'Start time must use HH:MM format'),
   endTime: z.string().regex(TIME_PATTERN, 'End time must use HH:MM format'),
+  room: z.string().trim().max(50).nullable().optional(),
   subjectId: optionalId,
   facultyId: optionalId,
-}).refine((data) => {
+  batchBFacultyId: optionalId,
+}).strict().refine((data) => {
   const start = timeToMinutes(data.startTime);
   const end = timeToMinutes(data.endTime);
   return start !== null && end !== null && start < end;

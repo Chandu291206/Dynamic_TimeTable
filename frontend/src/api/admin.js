@@ -46,3 +46,25 @@ export const deleteCR = (id, options) => apiDelete(`/api/admin/crs/${id}`, optio
 
 // Logs
 export const getTimetableLogs = (options) => apiGet('/api/admin/logs', options)
+
+// Periods
+export const getAdminPeriods = (options) => apiGet('/api/admin/periods', options)
+
+// Conflicts & Faculty Availability
+export const getAdminConflicts = (options) => apiGet('/api/admin/conflicts', options)
+export const getFacultyBusyMap = (excludeClassId = null, options) => {
+  const query = excludeClassId ? `?excludeClassId=${encodeURIComponent(excludeClassId)}` : ''
+  return apiGet(`/api/admin/faculty-busy-map${query}`, options)
+}
+
+// Timetable Designer (Phase 5)
+export const createDesignerDraft = (data, options) => apiPost('/api/admin/designer/drafts', data, options)
+export const getDesignerDrafts = (options) => apiGet('/api/admin/designer/drafts', options)
+export const getDesignerDraft = (draftId, options) => apiGet(`/api/admin/designer/drafts/${draftId}`, options)
+export const updateDesignerCell = (draftId, data, options) => apiPut(`/api/admin/designer/drafts/${draftId}/cells`, data, options)
+export const clearDesignerCell = (draftId, data, options) => apiDelete(`/api/admin/designer/drafts/${draftId}/cells`, { ...options, body: data })
+export const getDesignerAvailability = (draftId, options) => apiGet(`/api/admin/designer/drafts/${draftId}/availability`, options)
+export const validateDesignerDraft = (draftId, options) => apiPost(`/api/admin/designer/drafts/${draftId}/validate`, {}, options)
+export const publishDesignerDraft = (draftId, options) => apiPost(`/api/admin/designer/drafts/${draftId}/publish`, {}, options)
+export const discardDesignerDraft = (draftId, options) => apiDelete(`/api/admin/designer/drafts/${draftId}`, options)
+

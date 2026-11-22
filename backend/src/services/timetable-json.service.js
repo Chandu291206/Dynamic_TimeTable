@@ -1,5 +1,8 @@
 const prisma = require('../config/database');
 const { timetableJsonSchema } = require('../validators/timetable-json.schema');
+const { normalizeStaffId, normalizeSubjectCode } = require('../utils/identity');
+const { resolvePeriodsFromList } = require('../utils/period-resolver');
+const { assertNoClashes, ClashError } = require('./clash.service');
 const logger = require('../utils/logger');
 
 const DAY_MAP = {
@@ -76,17 +79,20 @@ async function importTimetableJson(rawJson, { db = prisma } = {}) {
   const json = parsed.data;
   const { year, branch, section } = parseClassInfo(json.semester, json.branch);
 
+  const academicYear = (json.academic_year || '2026-27').trim();
+
   // 1. Upsert ClassRoom with full metadata
   const classRoom = await db.classRoom.upsert({
     where: {
-      year_branch_section: {
+      year_branch_section_academicYear: {
         year,
         branch,
         section,
+        academicYear,
       },
     },
     update: {
-      academicYear: json.academic_year,
+      academicYear,
       semester: json.semester,
       effectiveFrom: json.effective_from,
       metadata: json,
@@ -95,7 +101,7 @@ async function importTimetableJson(rawJson, { db = prisma } = {}) {
       year,
       branch,
       section,
-      academicYear: json.academic_year,
+      academicYear,
       semester: json.semester,
       effectiveFrom: json.effective_from,
       metadata: json,
@@ -103,92 +109,123 @@ async function importTimetableJson(rawJson, { db = prisma } = {}) {
   });
 
   // 2. Process Courses and Faculty
-  const subjectMap = new Map(); // shortform/name -> { subject, facultyId }
+  const subjectMap = new Map(); // code/shortform/name -> { subject, facultyId, batchBFacultyId }
 
   for (const course of json.courses || []) {
     let facultyId = null;
+    let batchBFacultyId = null;
 
     // Handle faculty assignment
     let primaryFacultyName = '';
     let primaryStaffId = course.staff_id || null;
+    let secondaryFacultyName = '';
+    let secondaryStaffId = course.batch_b_staff_id || null;
 
     if (Array.isArray(course.faculty) && course.faculty.length > 0) {
-      primaryFacultyName = course.faculty[0].name;
+      primaryFacultyName = course.faculty[0].name || '';
       if (!primaryStaffId && course.faculty[0].staff_id) {
         primaryStaffId = course.faculty[0].staff_id;
+      }
+      if (course.faculty.length > 1) {
+        secondaryFacultyName = course.faculty[1].name || '';
+        if (!secondaryStaffId && course.faculty[1].staff_id) {
+          secondaryStaffId = course.faculty[1].staff_id;
+        }
       }
     } else if (typeof course.faculty === 'string' && course.faculty.trim()) {
       primaryFacultyName = course.faculty.trim();
     }
 
-    if (primaryFacultyName) {
-      // Find or create faculty by staffId or name
-      let facultyRecord = null;
-      if (primaryStaffId) {
-        facultyRecord = await db.faculty.findUnique({
-          where: { staffId: primaryStaffId },
-        });
-      }
-      if (!facultyRecord) {
-        facultyRecord = await db.faculty.findFirst({
-          where: { name: primaryFacultyName },
-        });
-      }
-      if (!facultyRecord) {
+    // Resolve primary faculty by staffId ONLY
+    if (primaryStaffId) {
+      const cleanStaffId = normalizeStaffId(primaryStaffId);
+      let facultyRecord = await db.faculty.findUnique({
+        where: { staffId: cleanStaffId },
+      });
+      if (!facultyRecord && primaryFacultyName) {
         facultyRecord = await db.faculty.create({
           data: {
+            staffId: cleanStaffId,
             name: primaryFacultyName,
-            staffId: primaryStaffId || undefined,
             department: branch,
             designation: 'Faculty',
           },
         });
       }
-      facultyId = facultyRecord.id;
+      if (facultyRecord) {
+        facultyId = facultyRecord.id;
+      }
     }
 
-    // Upsert Subject
-    const subjectName = (course.shortform || course.course_name).trim();
+    // Resolve Batch B faculty by staffId ONLY
+    if (secondaryStaffId) {
+      const cleanStaffIdB = normalizeStaffId(secondaryStaffId);
+      let facultyRecordB = await db.faculty.findUnique({
+        where: { staffId: cleanStaffIdB },
+      });
+      if (!facultyRecordB && secondaryFacultyName) {
+        facultyRecordB = await db.faculty.create({
+          data: {
+            staffId: cleanStaffIdB,
+            name: secondaryFacultyName,
+            department: branch,
+            designation: 'Faculty',
+          },
+        });
+      }
+      if (facultyRecordB) {
+        batchBFacultyId = facultyRecordB.id;
+      }
+    }
+
+    // Upsert Subject strictly by unique natural code
+    const courseCode = normalizeSubjectCode(course.course_code || course.course_name);
+    const subjectName = (course.course_name || courseCode).trim();
+    const isBreak = Boolean(course.is_break || courseCode === 'LUNCH');
+
     const subjectRecord = await db.subject.upsert({
-      where: { name: subjectName },
+      where: { code: courseCode },
       update: {
-        code: course.course_code,
-        shortform: course.shortform,
+        name: subjectName,
+        isBreak,
       },
       create: {
+        code: courseCode,
         name: subjectName,
-        code: course.course_code,
-        shortform: course.shortform,
+        isBreak,
       },
     });
 
-    subjectMap.set(subjectName.toUpperCase(), {
+    const mapping = {
       subject: subjectRecord,
       facultyId,
-    });
+      batchBFacultyId,
+    };
+
+    subjectMap.set(courseCode, mapping);
+    if (course.shortform) {
+      subjectMap.set(course.shortform.trim().toUpperCase(), mapping);
+    }
     if (course.course_name) {
-      subjectMap.set(course.course_name.trim().toUpperCase(), {
-        subject: subjectRecord,
-        facultyId,
-      });
+      subjectMap.set(course.course_name.trim().toUpperCase(), mapping);
     }
   }
 
-  // Ensure LUNCH subject exists
-  let lunchSubject = await db.subject.findUnique({ where: { name: 'LUNCH' } });
+  // Ensure break/LUNCH subject exists
+  let lunchSubject = await db.subject.findFirst({ where: { isBreak: true } });
+  if (!lunchSubject) {
+    lunchSubject = await db.subject.findUnique({ where: { code: 'LUNCH' } });
+  }
   if (!lunchSubject) {
     lunchSubject = await db.subject.create({
-      data: { name: 'LUNCH', shortform: 'LUNCH' },
+      data: { code: 'LUNCH', name: 'Lunch Break', isBreak: true },
     });
   }
-  subjectMap.set('LUNCH', { subject: lunchSubject, facultyId: null });
+  subjectMap.set('LUNCH', { subject: lunchSubject, facultyId: null, batchBFacultyId: null });
 
-  // 3. Delete existing recurring slots for this class to allow clean replacement
-  await db.timetableSlot.deleteMany({
-    where: { classId: classRoom.id },
-  });
-
-  // 4. Populate TimetableSlots for each day
+  // 3. Build candidate slots for the timetable
+  const activePeriods = await db.period.findMany({ orderBy: { order: 'asc' } });
+  const candidateSlots = [];
   for (const [dayName, items] of Object.entries(json.timetable || {})) {
     const dayIndex = DAY_MAP[dayName.toLowerCase()];
     if (dayIndex === undefined) continue;
@@ -204,35 +241,67 @@ async function importTimetableJson(rawJson, { db = prisma } = {}) {
       const subjectKey = (item.subject || '').trim().toUpperCase();
       let subjectId = null;
       let facultyId = null;
+      let batchBFacultyId = null;
 
       if (subjectMap.has(subjectKey)) {
         const found = subjectMap.get(subjectKey);
         subjectId = found.subject?.id || null;
         facultyId = found.facultyId || null;
+        batchBFacultyId = found.batchBFacultyId || null;
       } else if (item.subject) {
-        // Create new subject if not previously listed
+        // Create new subject by code if not previously listed
+        const code = normalizeSubjectCode(item.subject.trim());
+        const isBreak = code === 'LUNCH';
         const newSub = await db.subject.upsert({
-          where: { name: item.subject.trim() },
+          where: { code },
           update: {},
-          create: { name: item.subject.trim(), shortform: item.subject.trim() },
+          create: {
+            code,
+            name: item.subject.trim(),
+            isBreak,
+          },
         });
         subjectId = newSub.id;
       }
 
-      const periodsStr = item.periods && item.periods.length > 0 ? item.periods.join(',') : null;
+      const { startPeriodId, endPeriodId } = resolvePeriodsFromList(startTime, endTime, activePeriods);
 
-      await db.timetableSlot.create({
-        data: {
-          classId: classRoom.id,
-          day: dayIndex,
-          startTime,
-          endTime,
-          periods: periodsStr,
-          subjectId,
-          facultyId,
-        },
+      candidateSlots.push({
+        classId: classRoom.id,
+        day: dayIndex,
+        startTime,
+        endTime,
+        room: item.room || null,
+        startPeriodId,
+        endPeriodId,
+        subjectId,
+        facultyId,
+        batchBFacultyId,
       });
     }
+  }
+
+  // 4. Validate clash prevention across candidate slots and against other classes
+  if (options.checkClashes !== false) {
+    const otherSlots = await db.timetableSlot.findMany({
+      where: { classId: { not: classRoom.id } },
+      include: { class: true, subject: true, faculty: true, batchBFaculty: true },
+    });
+    assertNoClashes({
+      candidateSlots,
+      existingSlots: otherSlots,
+    });
+  }
+
+  // 5. Delete existing slots for this class and insert verified candidate slots
+  await db.timetableSlot.deleteMany({
+    where: { classId: classRoom.id },
+  });
+
+  for (const slotData of candidateSlots) {
+    await db.timetableSlot.create({
+      data: slotData,
+    });
   }
 
   const result = {
@@ -258,7 +327,7 @@ async function exportTimetableJson(classId, { db = prisma } = {}) {
     include: {
       slots: {
         orderBy: [{ day: 'asc' }, { startTime: 'asc' }],
-        include: { subject: true, faculty: true },
+        include: { subject: true, faculty: true, startPeriod: true, endPeriod: true },
       },
     },
   });
@@ -288,14 +357,23 @@ async function exportTimetableJson(classId, { db = prisma } = {}) {
     const dayName = DAY_NAMES[i];
     const daySlots = (classRoom.slots || []).filter((s) => s.day === i);
     timetableMap[dayName] = daySlots.map((slot) => {
-      const periodsArr = slot.periods
-        ? slot.periods.split(',').map((p) => parseInt(p, 10)).filter((p) => !isNaN(p))
-        : undefined;
+      let periodsArr = undefined;
+      if (slot.startPeriod && slot.endPeriod) {
+        const startOrder = slot.startPeriod.order;
+        const endOrder = slot.endPeriod.order;
+        if (startOrder <= endOrder) {
+          periodsArr = [];
+          for (let o = startOrder; o <= endOrder; o++) {
+            periodsArr.push(o);
+          }
+        }
+      }
 
       return {
         time: `${slot.startTime}-${slot.endTime}`,
         ...(periodsArr && periodsArr.length > 0 ? { periods: periodsArr } : {}),
-        subject: slot.subject?.shortform || slot.subject?.name || '---',
+        ...(slot.room ? { room: slot.room } : {}),
+        subject: slot.subject?.code || slot.subject?.name || '---',
       };
     });
   }
@@ -303,12 +381,12 @@ async function exportTimetableJson(classId, { db = prisma } = {}) {
   // Build courses map
   const coursesMap = new Map();
   for (const slot of classRoom.slots || []) {
-    if (!slot.subject || slot.subject.name.toUpperCase() === 'LUNCH') continue;
+    if (!slot.subject || slot.subject.isBreak || slot.subject.code === 'LUNCH') continue;
     const name = slot.subject.name;
     if (!coursesMap.has(name)) {
       coursesMap.set(name, {
         course_code: slot.subject.code || `GR24A${slot.subject.id.toString().padStart(4, '0')}`,
-        shortform: slot.subject.shortform || name,
+        shortform: slot.subject.code || name,
         course_name: name,
         faculty: slot.faculty?.name || 'TBA',
         staff_id: slot.faculty?.staffId || undefined,

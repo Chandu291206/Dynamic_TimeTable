@@ -111,4 +111,10 @@ async function getFacultyImage(req, res) {
   res.type(faculty.imageMimeType).send(faculty.imageData);
 }
 
-module.exports = { getClasses, getTimetable, getWeeklyTimetable, getTimetableJson, getFacultyImage };
+async function getPeriods(req, res) {
+  const prisma = require('../config/database');
+  const periods = await prisma.period.findMany({ orderBy: { order: 'asc' } });
+  return res.json({ success: true, data: periods });
+}
+
+module.exports = { getClasses, getPeriods, getTimetable, getWeeklyTimetable, getTimetableJson, getFacultyImage };

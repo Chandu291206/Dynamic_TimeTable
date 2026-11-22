@@ -38,6 +38,8 @@ export default function SlotManagement() {
     endTime: '09:50',
     subjectId: '',
     facultyId: '',
+    batchBFacultyId: '',
+    room: '',
   })
   const [submitting, setSubmitting] = useState(false)
 
@@ -87,6 +89,8 @@ export default function SlotManagement() {
       endTime: '09:50',
       subjectId: '',
       facultyId: '',
+      batchBFacultyId: '',
+      room: '',
     })
     setShowForm(true)
   }
@@ -99,6 +103,8 @@ export default function SlotManagement() {
       endTime: slot.endTime,
       subjectId: slot.subjectId || '',
       facultyId: slot.facultyId || '',
+      batchBFacultyId: slot.batchBFacultyId || '',
+      room: slot.room || '',
     })
     setShowForm(true)
   }
@@ -123,8 +129,10 @@ export default function SlotManagement() {
         day: Number(formData.day),
         startTime: formData.startTime,
         endTime: formData.endTime,
+        room: formData.room ? formData.room.trim() : null,
         subjectId: formData.subjectId ? Number(formData.subjectId) : null,
         facultyId: formData.facultyId ? Number(formData.facultyId) : null,
+        batchBFacultyId: formData.batchBFacultyId ? Number(formData.batchBFacultyId) : null,
       }
 
       if (editingSlotId) {
@@ -287,13 +295,15 @@ export default function SlotManagement() {
                   >
                     <option value="">-- No Subject / Free --</option>
                     {subjects.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
+                      <option key={s.id} value={s.id}>
+                        {s.code ? `${s.code} — ${s.name}` : s.name}
+                      </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="slot-faculty" className="field-label">Faculty</label>
+                  <label htmlFor="slot-faculty" className="field-label">Faculty (Batch A / Theory)</label>
                   <select
                     id="slot-faculty"
                     className="select-input"
@@ -303,9 +313,43 @@ export default function SlotManagement() {
                   >
                     <option value="">-- No Faculty / TBA --</option>
                     {faculty.map((f) => (
-                      <option key={f.id} value={f.id}>{f.name} {f.department ? `(${f.department})` : ''}</option>
+                      <option key={f.id} value={f.id}>
+                        {f.name} {f.staffId ? `— ${f.staffId}` : ''} {f.department ? `(${f.department})` : ''}
+                      </option>
                     ))}
                   </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="slot-batch-b-faculty" className="field-label">Batch B Faculty (Labs)</label>
+                  <select
+                    id="slot-batch-b-faculty"
+                    className="select-input"
+                    value={formData.batchBFacultyId}
+                    onChange={(e) => setFormData({ ...formData, batchBFacultyId: e.target.value })}
+                    disabled={submitting}
+                  >
+                    <option value="">-- No Batch B Faculty --</option>
+                    {faculty.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name} {f.staffId ? `— ${f.staffId}` : ''} {f.department ? `(${f.department})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="slot-room" className="field-label">Room / Location</label>
+                  <input
+                    id="slot-room"
+                    type="text"
+                    className="text-input"
+                    placeholder="e.g. 1302 or Lab 3"
+                    value={formData.room}
+                    onChange={(e) => setFormData({ ...formData, room: e.target.value })}
+                    maxLength={50}
+                    disabled={submitting}
+                  />
                 </div>
               </div>
 

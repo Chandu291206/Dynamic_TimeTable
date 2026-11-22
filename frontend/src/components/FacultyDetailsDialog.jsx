@@ -30,7 +30,6 @@ export default function FacultyDetailsDialog({ slot, day, onClose, triggerRef })
     ['Department', faculty?.department],
     ['Qualification', faculty?.qualification],
     ['Email', faculty?.email],
-    ['Phone', faculty?.phone],
   ].filter(([, value]) => value)
 
   return <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>

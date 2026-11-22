@@ -22,13 +22,14 @@ const facultyFields = {
   designation: nullableText(160),
   qualification: nullableText(160),
   email: z.string().email().max(254).nullable().optional(),
-  phone: nullableText(40),
   imageSourceUrl: safeHttpUrl,
   profileSourceUrl: safeHttpUrl,
+  isActive: z.boolean().optional(),
 };
 
-const createFacultySchema = z.object(facultyFields);
+const createFacultySchema = z.object(facultyFields).strict();
 const updateFacultySchema = z.object(Object.fromEntries(Object.entries(facultyFields).map(([key, value]) => [key, key === 'name' ? value.optional() : value])))
+  .strict()
   .refine((value) => Object.keys(value).length > 0, 'Provide at least one field to update');
 
 module.exports = { createFacultySchema, updateFacultySchema };

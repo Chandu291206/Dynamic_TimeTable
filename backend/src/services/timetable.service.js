@@ -35,13 +35,13 @@ async function getTimetable(classId, date) {
   const slots = day > 5 ? [] : await prisma.timetableSlot.findMany({
     where: { classId, day },
     orderBy: { startTime: 'asc' },
-    include: { subject: true, faculty: true },
+    include: { subject: true, faculty: true, batchBFaculty: true },
   });
 
   const overrides = day > 5 ? [] : await prisma.timetableOverride.findMany({
     where: { classId, date },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    include: { subject: true, faculty: true },
+    include: { subject: true, faculty: true, batchBFaculty: true },
   });
   const resolvedSlots = applyOverrides(slots, overrides);
 
@@ -53,8 +53,9 @@ async function getTimetable(classId, date) {
       id: slot.id,
       startTime: slot.startTime,
       endTime: slot.endTime,
-      subject: override ? (override.subject ? { id: override.subject.id, name: override.subject.name } : null) : (slot.subject ? { id: slot.subject.id, name: slot.subject.name } : null),
+      subject: override ? (override.subject ? { id: override.subject.id, code: override.subject.code, name: override.subject.name, isBreak: override.subject.isBreak } : null) : (slot.subject ? { id: slot.subject.id, code: slot.subject.code, name: slot.subject.name, isBreak: slot.subject.isBreak } : null),
       faculty: override ? facultyPayload(override.faculty) : facultyPayload(slot.faculty),
+      batchBFaculty: override ? facultyPayload(override.batchBFaculty) : facultyPayload(slot.batchBFaculty),
       isOverride: Boolean(override),
       override: override ? {
         id: override.id,
@@ -85,12 +86,12 @@ async function getWeeklyTimetable(classId, referenceDate) {
     prisma.timetableSlot.findMany({
       where: { classId },
       orderBy: [{ day: 'asc' }, { startTime: 'asc' }],
-      include: { subject: true, faculty: true },
+      include: { subject: true, faculty: true, batchBFaculty: true },
     }),
     prisma.timetableOverride.findMany({
       where: { classId, date: { gte: monday, lte: saturday } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      include: { subject: true, faculty: true },
+      include: { subject: true, faculty: true, batchBFaculty: true },
     }),
   ]);
 
@@ -114,8 +115,9 @@ async function getWeeklyTimetable(classId, referenceDate) {
         id: slot.id,
         startTime: slot.startTime,
         endTime: slot.endTime,
-        subject: override ? (override.subject ? { id: override.subject.id, name: override.subject.name } : null) : (slot.subject ? { id: slot.subject.id, name: slot.subject.name } : null),
+        subject: override ? (override.subject ? { id: override.subject.id, code: override.subject.code, name: override.subject.name, isBreak: override.subject.isBreak } : null) : (slot.subject ? { id: slot.subject.id, code: slot.subject.code, name: slot.subject.name, isBreak: slot.subject.isBreak } : null),
         faculty: override ? facultyPayload(override.faculty) : facultyPayload(slot.faculty),
+        batchBFaculty: override ? facultyPayload(override.batchBFaculty) : facultyPayload(slot.batchBFaculty),
         isOverride: Boolean(override),
         override: override ? {
           id: override.id,
@@ -146,11 +148,13 @@ async function getWeeklyTimetable(classId, referenceDate) {
   // Extract distinct courses and faculty directory
   const courseMap = new Map();
   function registerCourse(subj, fac) {
-    if (!subj || !subj.name || subj.name.trim().toUpperCase() === 'LUNCH') return;
-    const existing = courseMap.get(subj.name);
+    if (!subj || subj.isBreak || subj.code === 'LUNCH') return;
+    const key = subj.code || String(subj.id);
+    const existing = courseMap.get(key);
     if (!existing) {
-      courseMap.set(subj.name, {
+      courseMap.set(key, {
         id: subj.id,
+        code: subj.code,
         name: subj.name,
         faculty: fac ? facultyPayload(fac) : null,
       });
@@ -182,6 +186,18 @@ async function getWeeklyTimetable(classId, referenceDate) {
     const [s, e] = (p.time || '').split('-');
     return { startTime: s, endTime: e, period: p.period };
   }) || [];
+
+  if (canonicalPeriods.length === 0) {
+    const dbPeriods = await prisma.period.findMany({ orderBy: { order: 'asc' } });
+    if (dbPeriods.length > 0) {
+      canonicalPeriods = dbPeriods.map((p) => ({
+        startTime: p.startTime,
+        endTime: p.endTime,
+        period: p.isBreak ? 'LUNCH' : p.periodNumber,
+        isLunch: p.isBreak,
+      }));
+    }
+  }
 
   const lunchTime = meta.working_hours?.lunch || '12:20-12:55';
   if (lunchTime && canonicalPeriods.length > 0) {

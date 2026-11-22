@@ -1,7 +1,7 @@
 import FacultyAvatar from './FacultyAvatar.jsx'
 
 export default function TimetableCell({ slot, onOpen, isCurrent = false }) {
-  const isLunch = slot.subject?.name?.trim().toUpperCase() === 'LUNCH'
+  const isLunch = Boolean(slot.isBreak || slot.subject?.isBreak || slot.subject?.code === 'LUNCH' || slot.subject?.name?.trim().toUpperCase() === 'LUNCH')
   const subject = isLunch ? 'LUNCH ' : (slot.subject?.name || '---')
   const faculty = isLunch ? '' : (slot.faculty?.name || 'TBA')
   const time = `${slot.startTime} – ${slot.endTime}`

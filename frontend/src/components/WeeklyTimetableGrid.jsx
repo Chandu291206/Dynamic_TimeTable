@@ -207,6 +207,8 @@ export default function WeeklyTimetableGrid({
                     // Match non-lunch slot that corresponds to this period
                     const slot = dayObj.slots?.find(
                       (s) =>
+                        !s.subject?.isBreak &&
+                        s.subject?.code !== 'LUNCH' &&
                         s.subject?.name?.trim().toUpperCase() !== 'LUNCH' &&
                         (s.startTime === period.startTime ||
                           (s.startTime <= period.startTime && s.endTime >= period.endTime))
