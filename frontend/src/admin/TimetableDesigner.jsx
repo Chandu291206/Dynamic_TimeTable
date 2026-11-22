@@ -23,9 +23,26 @@ const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satu
 export default function TimetableDesigner({ classId: propClassId }) {
   const { classId: routeClassId } = useParams()
   const navigate = useNavigate()
-  const { showToast } = useToast()
+  const toast = useToast()
 
-  const selectedClassId = propClassId || routeClassId || ''
+  const showToast = useCallback((msg, type = 'info') => {
+    if (typeof toast?.showToast === 'function') {
+      toast.showToast(msg, type)
+    } else if (typeof toast?.[type] === 'function') {
+      toast[type](msg)
+    } else if (typeof toast?.info === 'function') {
+      toast.info(msg)
+    }
+  }, [toast])
+
+  const [selectedClassId, setSelectedClassId] = useState(propClassId || routeClassId || '')
+
+  useEffect(() => {
+    const target = propClassId || routeClassId || ''
+    if (target && target !== selectedClassId) {
+      setSelectedClassId(target)
+    }
+  }, [propClassId, routeClassId])
 
   const [classes, setClasses] = useState([])
   const [subjects, setSubjects] = useState([])
@@ -88,14 +105,14 @@ export default function TimetableDesigner({ classId: propClassId }) {
       )
 
       if (openDraft) {
-        // Load detailed draft data
-        const draftDetailRes = await getDesignerDraft(openDraft.id)
+        // Load detailed draft data and availability concurrently
+        const [draftDetailRes, availRes] = await Promise.all([
+          getDesignerDraft(openDraft.id),
+          getDesignerAvailability(openDraft.id),
+        ])
         setCurrentDraft(draftDetailRes.data.draft)
         setPeriods(draftDetailRes.data.periods || [])
         setValidation(draftDetailRes.data.validation || { isValid: true, clashes: [] })
-
-        // Load availability busy map
-        const availRes = await getDesignerAvailability(openDraft.id)
         setBusyMap(availRes.data?.busyMap || {})
       } else {
         setCurrentDraft(null)
@@ -107,15 +124,36 @@ export default function TimetableDesigner({ classId: propClassId }) {
     }
   }, [])
 
+  // Fast in-place draft refresh without global drafts table scan or loading flickers
+  const refreshDraft = useCallback(async (draftId) => {
+    if (!draftId) return
+    try {
+      const [draftDetailRes, availRes] = await Promise.all([
+        getDesignerDraft(draftId),
+        getDesignerAvailability(draftId),
+      ])
+      if (draftDetailRes?.data?.draft) {
+        setCurrentDraft(draftDetailRes.data.draft)
+        setPeriods(draftDetailRes.data.periods || [])
+        setValidation(draftDetailRes.data.validation || { isValid: true, clashes: [] })
+      }
+      if (availRes?.data?.busyMap) {
+        setBusyMap(availRes.data.busyMap)
+      }
+    } catch (err) {
+      console.error('Failed to refresh draft in place, falling back to full reload:', err)
+      await loadDraftForClass(selectedClassId)
+    }
+  }, [loadDraftForClass, selectedClassId])
+
   useEffect(() => {
     loadDraftForClass(selectedClassId)
   }, [selectedClassId, loadDraftForClass])
 
   const handleClassChange = (newId) => {
-    if (propClassId) {
-      loadDraftForClass(newId)
-    } else {
-      navigate(`/admin/designer/${newId}`)
+    setSelectedClassId(newId)
+    if (routeClassId !== undefined) {
+      navigate(newId ? `/admin/designer/${newId}` : `/admin/designer`, { replace: true })
     }
   }
 
@@ -129,7 +167,11 @@ export default function TimetableDesigner({ classId: propClassId }) {
         startFrom,
       })
       showToast('Timetable draft created', 'success')
-      await loadDraftForClass(selectedClassId)
+      if (res?.data?.id) {
+        await refreshDraft(res.data.id)
+      } else {
+        await loadDraftForClass(selectedClassId)
+      }
     } catch (err) {
       showToast(err.message || 'Failed to create draft', 'error')
     } finally {
@@ -140,12 +182,10 @@ export default function TimetableDesigner({ classId: propClassId }) {
   // Save cell from editor
   const handleSaveCell = async (cellPayload) => {
     if (!currentDraft) return
-    const res = await updateDesignerCell(currentDraft.id, cellPayload)
-
+    await updateDesignerCell(currentDraft.id, cellPayload)
     showToast('Slot updated', 'success')
-
-    // Refresh draft details
-    await loadDraftForClass(selectedClassId)
+    // Smooth in-place refresh without resetting full page loading spinners
+    await refreshDraft(currentDraft.id)
   }
 
   // Clear cell from editor
@@ -153,7 +193,8 @@ export default function TimetableDesigner({ classId: propClassId }) {
     if (!currentDraft) return
     await clearDesignerCell(currentDraft.id, clearPayload)
     showToast('Slot cleared', 'success')
-    await loadDraftForClass(selectedClassId)
+    // Smooth in-place refresh without resetting full page loading spinners
+    await refreshDraft(currentDraft.id)
   }
 
   // Run full validation check

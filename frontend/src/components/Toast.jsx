@@ -21,8 +21,10 @@ export function ToastProvider({ children }) {
   }, [])
 
   const toast = {
+    showToast: (msg, type = 'info', duration) => addToast(msg, type === 'warning' ? 'error' : type, duration),
     success: (msg, duration) => addToast(msg, 'success', duration),
     error: (msg, duration) => addToast(msg, 'error', duration),
+    warning: (msg, duration) => addToast(msg, 'error', duration),
     info: (msg, duration) => addToast(msg, 'info', duration),
   }
 
