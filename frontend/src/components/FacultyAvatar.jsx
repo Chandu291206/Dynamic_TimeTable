@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 function initials(name) {
   return (name || 'TBA')
@@ -13,6 +13,10 @@ function initials(name) {
 export default function FacultyAvatar({ faculty, size = 'small' }) {
   const [imgError, setImgError] = useState(false)
   const imageSrc = faculty?.imageSourceUrl || faculty?.imageUrl
+
+  useEffect(() => {
+    setImgError(false)
+  }, [imageSrc])
 
   if (imageSrc && !imgError) {
     return (

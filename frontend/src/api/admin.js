@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost, apiPut } from './client.js'
+import { apiDelete, apiGet, apiPost, apiPut, apiUrl } from './client.js'
 
 // Faculty
 export const getAdminFaculty = (options) => apiGet('/api/admin/faculty', options)
@@ -11,7 +11,7 @@ export const scrapeFacultyWeb = (id = null, options) => {
 export const createFaculty = (data, options) => apiPost('/api/admin/faculty', data, options)
 export const updateFaculty = (id, data, options) => apiPut(`/api/admin/faculty/${id}`, data, options)
 export const deleteFaculty = (id, options) => apiDelete(`/api/admin/faculty/${id}`, options)
-export const proxyPdfUrl = (url) => `/api/admin/faculty/proxy-pdf?url=${encodeURIComponent(url)}`
+export const proxyPdfUrl = (url) => apiUrl(`/api/admin/faculty/proxy-pdf?url=${encodeURIComponent(url)}`)
 export const extractPdfText = (payload, options) => apiPost('/api/admin/faculty/extract-pdf-text', payload, options)
 
 // Subjects
@@ -67,4 +67,23 @@ export const getDesignerAvailability = (draftId, options) => apiGet(`/api/admin/
 export const validateDesignerDraft = (draftId, options) => apiPost(`/api/admin/designer/drafts/${draftId}/validate`, {}, options)
 export const publishDesignerDraft = (draftId, options) => apiPost(`/api/admin/designer/drafts/${draftId}/publish`, {}, options)
 export const discardDesignerDraft = (draftId, options) => apiDelete(`/api/admin/designer/drafts/${draftId}`, options)
+
+// Live Monitor & Master Matrix
+export const getAdminLiveMonitor = (params = {}, options) => {
+  const query = new URLSearchParams()
+  if (params.date) query.set('date', params.date)
+  if (params.time) query.set('time', params.time)
+  if (params.year) query.set('year', params.year)
+  const qs = query.toString() ? `?${query.toString()}` : ''
+  return apiGet(`/api/admin/monitor/live${qs}`, options)
+}
+
+export const getAdminMasterMatrix = (params = {}, options) => {
+  const query = new URLSearchParams()
+  if (params.year) query.set('year', params.year)
+  if (params.day !== undefined && params.day !== null && params.day !== 'ALL') query.set('day', params.day)
+  if (params.date) query.set('date', params.date)
+  const qs = query.toString() ? `?${query.toString()}` : ''
+  return apiGet(`/api/admin/monitor/master-matrix${qs}`, options)
+}
 

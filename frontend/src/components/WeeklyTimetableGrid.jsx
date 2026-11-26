@@ -225,7 +225,8 @@ export default function WeeklyTimetableGrid({
                       )
                     }
 
-                    const subjectName = slot.subject?.name || '---'
+                    const subjectShortform = slot.subject?.code || slot.subject?.name || '---'
+                    const subjectFullName = slot.subject?.name || slot.subject?.code || ''
                     const facultyName = slot.faculty?.name || ''
 
                     return (
@@ -239,15 +240,22 @@ export default function WeeklyTimetableGrid({
                           type="button"
                           className="matrix-slot-btn"
                           onClick={() => onOpen(slot, fullDayLabel)}
-                          title={`${subjectName} (${slot.startTime} - ${slot.endTime}) · ${facultyName || 'TBA'} · Click for faculty details`}
-                          aria-label={`${subjectName}, ${slot.startTime} to ${slot.endTime}, faculty ${facultyName || 'TBA'}`}
+                          title={`${subjectFullName} (${subjectShortform}) · ${slot.startTime} - ${slot.endTime} · ${facultyName || 'TBA'} · Click for faculty details`}
+                          aria-label={`${subjectFullName}, ${slot.startTime} to ${slot.endTime}, faculty ${facultyName || 'TBA'}`}
                         >
                           <div className="matrix-slot-cell-row">
                             <div className="matrix-slot-avatar-wrap">
                               <FacultyAvatar faculty={slot.faculty} size="cell" />
                             </div>
                             <div className="matrix-slot-beside">
-                              <span className="matrix-slot-subject">{subjectName}</span>
+                              <div className="matrix-slot-subject-wrap">
+                                <span className="matrix-slot-subject" title={subjectFullName}>{subjectShortform}</span>
+                                {slot.subject?.electiveTag && (
+                                  <span className="elective-tag-badge" title={`Elective Track: ${slot.subject.electiveTag}`}>
+                                    {slot.subject.electiveTag}
+                                  </span>
+                                )}
+                              </div>
                               <span className="matrix-slot-faculty-name" title={facultyName || 'TBA'}>
                                 {facultyName || 'TBA'}
                               </span>
@@ -299,44 +307,60 @@ export default function WeeklyTimetableGrid({
                     </td>
                   </tr>
                 ) : (
-                  courses.map((course) => (
-                    <tr key={course.id || course.name}>
-                      <td className="directory-course-name">
-                        <b>{course.name}</b>
-                      </td>
-                      <td className="directory-faculty-name">
-                        {course.faculty ? (
-                          <div className="directory-faculty-cell">
-                            <FacultyAvatar faculty={course.faculty} size="small" />
-                            {course.faculty.profileSourceUrl ? (
-                              <a
-                                href={course.faculty.profileSourceUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="faculty-link-inline"
-                                title={`View ${course.faculty.name}'s official GRIET profile`}
-                              >
-                                {course.faculty.name} ↗
-                              </a>
-                            ) : (
-                              <span>{course.faculty.name}</span>
+                  courses.map((course) => {
+                    const fullName = course.course_name || course.name || course.shortform || '---'
+                    const shortform = course.shortform || course.code || ''
+                    return (
+                      <tr key={course.id || course.name}>
+                        <td className="directory-course-name">
+                          <div className="directory-course-title-wrap">
+                            <span className="directory-course-full-name">{fullName}</span>
+                            {shortform && shortform !== fullName && (
+                              <span className="directory-course-shortform-badge" title={`Timetable Shortform: ${shortform}`}>
+                                {shortform}
+                              </span>
+                            )}
+                            {course.electiveTag && (
+                              <span className="elective-tag-badge" title={`Elective Track: ${course.electiveTag}`}>
+                                {course.electiveTag}
+                              </span>
                             )}
                           </div>
-                        ) : (
-                          <span className="directory-muted">To be announced</span>
-                        )}
-                      </td>
-                      <td className="directory-meta">
-                        {course.faculty?.staffId ? (
-                          <span className="directory-staff-id">
-                            ID: {course.faculty.staffId}
-                          </span>
-                        ) : (
-                          course.faculty?.designation || '—'
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="directory-faculty-name">
+                          {course.faculty ? (
+                            <div className="directory-faculty-cell">
+                              <FacultyAvatar faculty={course.faculty} size="small" />
+                              {course.faculty.profileSourceUrl ? (
+                                <a
+                                  href={course.faculty.profileSourceUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="faculty-link-inline"
+                                  title={`View ${course.faculty.name}'s official GRIET profile`}
+                                >
+                                  {course.faculty.name} ↗
+                                </a>
+                              ) : (
+                                <span>{course.faculty.name}</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="directory-muted">To be announced</span>
+                          )}
+                        </td>
+                        <td className="directory-meta">
+                          {course.faculty?.staffId ? (
+                            <span className="directory-staff-id">
+                              ID: {course.faculty.staffId}
+                            </span>
+                          ) : (
+                            course.faculty?.designation || '—'
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })
                 )}
               </tbody>
             </table>

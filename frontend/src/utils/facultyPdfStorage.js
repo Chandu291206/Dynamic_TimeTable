@@ -1,4 +1,5 @@
 import { extractPdfText, proxyPdfUrl, updateFaculty } from '../api/admin.js'
+import { getAuthToken } from '../api/client.js'
 
 const DB_NAME = 'faculty-profiles-db'
 const DB_VERSION = 1
@@ -231,7 +232,7 @@ export async function processPdfQueue(pdfQueue = [], onProgress) {
     try {
       // 1. Download PDF into browser memory
       const fetchUrl = proxyPdfUrl(item.pdfUrl)
-      const token = localStorage.getItem('token')
+      const token = getAuthToken()
       const headers = token ? { Authorization: `Bearer ${token}` } : {}
 
       const response = await fetch(fetchUrl, { headers })

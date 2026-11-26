@@ -354,12 +354,12 @@ export function parseTimetableSheet(sheet, sheetName) {
       const courseName = cleanStr(row[2])
       const facultyVal = row[facultyCol]
 
-      if (code && shortform && !code.match(/TIME TABLE|HOD|DAA/i)) {
+      if ((code || shortform) && !code.match(/TIME TABLE|HOD|DAA/i)) {
         const parsedFac = parseFaculty(facultyVal)
         courses.push({
-          course_code: code,
-          shortform,
-          course_name: courseName,
+          course_code: code || shortform,
+          shortform: shortform || code,
+          course_name: courseName || shortform || code,
           ...(parsedFac || {}),
         })
       }

@@ -250,4 +250,32 @@ describe('Faculty Web Scraper Service', () => {
     const match3 = findMatchesForFaculty(dbFaculty3, scrapedList);
     assert.equal(match3.length, 0);
   });
+
+  it('matches on faculty ID regardless of spelling differences in name and provides official name', () => {
+    // Database has misspelled name or typo, but correct staffId
+    const misspelledDbFaculty = { id: 42, name: 'Mohd. Asma Misspelled', staffId: '1908' };
+
+    const scrapedList = [
+      { name: 'Ms. Mohammad Asma', staffId: '1908', designation: 'Assistant Professor', department: 'DS' },
+    ];
+
+    const matches = findMatchesForFaculty(misspelledDbFaculty, scrapedList);
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0].staffId, '1908');
+
+    const merged = mergeMatchedRecords(matches);
+    assert.equal(merged.name, 'Ms. Mohammad Asma');
+    assert.equal(merged.department, 'DS');
+  });
+
+  it('matches numeric faculty IDs with leading zeros seamlessly', () => {
+    const dbFacultyWithZero = { id: 10, name: 'Dr. S. Govinda Rao', staffId: '0486' };
+    const scrapedList = [
+      { name: 'Dr. S. Govinda Rao', staffId: '486', designation: 'Professor & HOD', department: 'DS' },
+    ];
+
+    const matches = findMatchesForFaculty(dbFacultyWithZero, scrapedList);
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0].staffId, '486');
+  });
 });

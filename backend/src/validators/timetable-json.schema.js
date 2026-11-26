@@ -23,7 +23,7 @@ const facultyItemSchema = z.object({
 });
 
 const courseDefinitionSchema = z.object({
-  course_code: z.string().trim().min(1),
+  course_code: z.string().trim().optional(),
   shortform: z.string().trim().optional(),
   course_name: z.string().trim().min(1),
   faculty: z.union([z.string().trim(), z.array(facultyItemSchema)]),

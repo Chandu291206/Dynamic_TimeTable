@@ -1,9 +1,58 @@
 const prisma = require('../config/database');
 const { getTimetableDay } = require('../utils/dates');
 const { applyOverrides } = require('./override.service');
+const { resolveSlotRoom } = require('../utils/room-resolver');
+
+const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 function classLabel(classRoom) {
   return `Y${classRoom.year} - ${classRoom.branch} - ${classRoom.section}`;
+}
+
+function extractElectiveTag(text) {
+  if (!text) return null;
+  const m = String(text).match(/\b(PE|OE)\s*[-:]?\s*([0-9IVXLCDM]+|\bNPTEL\b)?/i);
+  if (!m) return null;
+  const type = m[1].toUpperCase();
+  let num = (m[2] || '').trim().toUpperCase();
+  const romanMap = { I: '1', II: '2', III: '3', IV: '4', V: '5', VI: '6' };
+  if (romanMap[num]) num = romanMap[num];
+  return num ? `${type}-${num}` : type;
+}
+
+function buildClassElectiveMap(metadata) {
+  const map = new Map();
+  const courses = metadata?.courses || [];
+  for (const c of courses) {
+    const tag = extractElectiveTag(c.shortform) || extractElectiveTag(c.course_name) || extractElectiveTag(c.course_code);
+    if (tag) {
+      if (c.shortform) map.set(c.shortform.trim().toUpperCase(), tag);
+      if (c.course_name) map.set(c.course_name.trim().toUpperCase(), tag);
+      const baseMatch = (c.shortform || '').match(/^([A-Za-z0-9_-]+)/);
+      if (baseMatch) map.set(baseMatch[1].toUpperCase(), tag);
+    }
+  }
+  return map;
+}
+
+function resolveElectiveTag(subject, electiveMap) {
+  if (!subject) return null;
+  const directTag = extractElectiveTag(subject.code) || extractElectiveTag(subject.name);
+  if (directTag) return directTag;
+  if (!electiveMap) return null;
+  return electiveMap.get((subject.code || '').toUpperCase()) || electiveMap.get((subject.name || '').toUpperCase()) || null;
+}
+
+function subjectPayload(subj, electiveMap) {
+  if (!subj) return null;
+  const electiveTag = resolveElectiveTag(subj, electiveMap);
+  return {
+    id: subj.id,
+    code: subj.code,
+    name: subj.name,
+    isBreak: subj.isBreak,
+    electiveTag: electiveTag || null,
+  };
 }
 
 function facultyPayload(faculty) {
@@ -43,6 +92,7 @@ async function getTimetable(classId, date) {
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     include: { subject: true, faculty: true, batchBFaculty: true },
   });
+  const electiveMap = buildClassElectiveMap(classRoom.metadata);
   const resolvedSlots = applyOverrides(slots, overrides);
 
   return {
@@ -53,7 +103,8 @@ async function getTimetable(classId, date) {
       id: slot.id,
       startTime: slot.startTime,
       endTime: slot.endTime,
-      subject: override ? (override.subject ? { id: override.subject.id, code: override.subject.code, name: override.subject.name, isBreak: override.subject.isBreak } : null) : (slot.subject ? { id: slot.subject.id, code: slot.subject.code, name: slot.subject.name, isBreak: slot.subject.isBreak } : null),
+      room: resolveSlotRoom(override || slot, classRoom.metadata, DAY_NAMES[day]),
+      subject: override ? subjectPayload(override.subject, electiveMap) : subjectPayload(slot.subject, electiveMap),
       faculty: override ? facultyPayload(override.faculty) : facultyPayload(slot.faculty),
       batchBFaculty: override ? facultyPayload(override.batchBFaculty) : facultyPayload(slot.batchBFaculty),
       isOverride: Boolean(override),
@@ -97,6 +148,7 @@ async function getWeeklyTimetable(classId, referenceDate) {
 
   const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+  const electiveMap = buildClassElectiveMap(classRoom.metadata);
   const days = [];
   for (let dayIndex = 0; dayIndex <= 5; dayIndex++) {
     const dayDate = new Date(monday);
@@ -115,7 +167,8 @@ async function getWeeklyTimetable(classId, referenceDate) {
         id: slot.id,
         startTime: slot.startTime,
         endTime: slot.endTime,
-        subject: override ? (override.subject ? { id: override.subject.id, code: override.subject.code, name: override.subject.name, isBreak: override.subject.isBreak } : null) : (slot.subject ? { id: slot.subject.id, code: slot.subject.code, name: slot.subject.name, isBreak: slot.subject.isBreak } : null),
+        room: resolveSlotRoom(override || slot, classRoom.metadata, DAY_NAMES[dayIndex]),
+        subject: override ? subjectPayload(override.subject, electiveMap) : subjectPayload(slot.subject, electiveMap),
         faculty: override ? facultyPayload(override.faculty) : facultyPayload(slot.faculty),
         batchBFaculty: override ? facultyPayload(override.batchBFaculty) : facultyPayload(slot.batchBFaculty),
         isOverride: Boolean(override),
@@ -208,15 +261,19 @@ async function getWeeklyTimetable(classId, referenceDate) {
     }
   }
 
-  const canonicalCourses = meta.courses && meta.courses.length > 0 ? meta.courses.map((c) => ({
-    name: c.shortform || c.course_name,
-    course_code: c.course_code,
-    shortform: c.shortform,
-    course_name: c.course_name,
-    faculty: typeof c.faculty === 'string'
-      ? { name: c.faculty, staffId: c.staff_id }
-      : (Array.isArray(c.faculty) && c.faculty[0] ? { name: c.faculty[0].name, staffId: c.faculty[0].staff_id } : null),
-  })) : fallbackCourses;
+  const canonicalCourses = meta.courses && meta.courses.length > 0 ? meta.courses.map((c) => {
+    const electiveTag = extractElectiveTag(c.shortform) || extractElectiveTag(c.course_name) || extractElectiveTag(c.course_code);
+    return {
+      name: c.course_name || c.shortform,
+      course_code: c.course_code,
+      shortform: c.shortform,
+      course_name: c.course_name,
+      electiveTag: electiveTag || null,
+      faculty: typeof c.faculty === 'string'
+        ? { name: c.faculty, staffId: c.staff_id }
+        : (Array.isArray(c.faculty) && c.faculty[0] ? { name: c.faculty[0].name, staffId: c.faculty[0].staff_id } : null),
+    };
+  }) : fallbackCourses;
 
   return {
     class: {
@@ -244,4 +301,13 @@ async function getFacultyImage(id) {
   });
 }
 
-module.exports = { classLabel, listClasses, getTimetable, getWeeklyTimetable, getFacultyImage };
+module.exports = {
+  classLabel,
+  listClasses,
+  getTimetable,
+  getWeeklyTimetable,
+  getFacultyImage,
+  extractElectiveTag,
+  buildClassElectiveMap,
+  resolveElectiveTag,
+};

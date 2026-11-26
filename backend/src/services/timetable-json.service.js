@@ -178,19 +178,19 @@ async function importTimetableJson(rawJson, { db = prisma } = {}) {
       }
     }
 
-    // Upsert Subject strictly by unique natural code
-    const courseCode = normalizeSubjectCode(course.course_code || course.course_name);
-    const subjectName = (course.course_name || courseCode).trim();
-    const isBreak = Boolean(course.is_break || courseCode === 'LUNCH');
+    // Upsert Subject using shortform or name as the primary reference code (not regulation code)
+    const primaryCode = normalizeSubjectCode(course.shortform || course.course_name || course.course_code);
+    const subjectName = (course.course_name || course.shortform || primaryCode).trim();
+    const isBreak = Boolean(course.is_break || primaryCode === 'LUNCH');
 
     const subjectRecord = await db.subject.upsert({
-      where: { code: courseCode },
+      where: { code: primaryCode },
       update: {
         name: subjectName,
         isBreak,
       },
       create: {
-        code: courseCode,
+        code: primaryCode,
         name: subjectName,
         isBreak,
       },
@@ -202,12 +202,43 @@ async function importTimetableJson(rawJson, { db = prisma } = {}) {
       batchBFacultyId,
     };
 
-    subjectMap.set(courseCode, mapping);
+    subjectMap.set(primaryCode, mapping);
     if (course.shortform) {
-      subjectMap.set(course.shortform.trim().toUpperCase(), mapping);
+      const sf = course.shortform.trim().toUpperCase();
+      subjectMap.set(sf, mapping);
+
+      // Handle elective aliases: PE-I <-> PE-1, OE-I <-> OE-1, etc.
+      const romanArabicMap = [
+        ['PE-I', 'PE-1'], ['PE-II', 'PE-2'], ['PE-III', 'PE-3'], ['PE-IV', 'PE-4'],
+        ['OE-I', 'OE-1'], ['OE-II', 'OE-2'], ['OE-III', 'OE-3'], ['OE-IV', 'OE-4'],
+      ];
+      for (const [roman, arabic] of romanArabicMap) {
+        if (sf === roman || sf === arabic) {
+          subjectMap.set(roman, mapping);
+          subjectMap.set(arabic, mapping);
+        }
+      }
+
+      // Handle parenthetical elective forms like "CC (PE-I)" or "NNDL (PE-III)"
+      const parenMatch = sf.match(/^(.+?)\s*\(([^)]+)\)$/);
+      if (parenMatch) {
+        const baseName = parenMatch[1].trim();
+        const electiveTag = parenMatch[2].trim();
+        subjectMap.set(baseName, mapping);
+        subjectMap.set(electiveTag, mapping);
+        for (const [roman, arabic] of romanArabicMap) {
+          if (electiveTag === roman || electiveTag === arabic) {
+            subjectMap.set(roman, mapping);
+            subjectMap.set(arabic, mapping);
+          }
+        }
+      }
     }
     if (course.course_name) {
       subjectMap.set(course.course_name.trim().toUpperCase(), mapping);
+    }
+    if (course.course_code) {
+      subjectMap.set(course.course_code.trim().toUpperCase(), mapping);
     }
   }
 
@@ -385,7 +416,7 @@ async function exportTimetableJson(classId, { db = prisma } = {}) {
     const name = slot.subject.name;
     if (!coursesMap.has(name)) {
       coursesMap.set(name, {
-        course_code: slot.subject.code || `GR24A${slot.subject.id.toString().padStart(4, '0')}`,
+        course_code: slot.subject.code || name,
         shortform: slot.subject.code || name,
         course_name: name,
         faculty: slot.faculty?.name || 'TBA',

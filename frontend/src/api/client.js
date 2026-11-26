@@ -1,5 +1,14 @@
 const TOKEN_KEY = 'tt_auth_token'
 
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
+
+export function apiUrl(path = '') {
+  if (!path) return ''
+  if (/^https?:\/\//i.test(path)) return path
+  const normalized = path.startsWith('/') ? path : `/${path}`
+  return `${API_BASE_URL}${normalized}`
+}
+
 export function getAuthToken() {
   return localStorage.getItem(TOKEN_KEY)
 }
@@ -31,7 +40,8 @@ async function request(path, options = {}) {
     formattedBody = JSON.stringify(body)
   }
 
-  const response = await fetch(path, {
+  const url = apiUrl(path)
+  const response = await fetch(url, {
     method,
     headers: reqHeaders,
     body: formattedBody,

@@ -8,6 +8,7 @@ const slotController = require('../controllers/admin-slot.controller');
 const logController = require('../controllers/admin-log.controller');
 const periodController = require('../controllers/admin-period.controller');
 const designerController = require('../controllers/admin-designer.controller');
+const monitorController = require('../controllers/admin-monitor.controller');
 const { authenticateJWT, requireAdmin } = require('../middleware/auth');
 
 router.use(authenticateJWT, requireAdmin);
@@ -59,5 +60,9 @@ router.get('/designer/drafts/:draftId/availability', designerController.getAvail
 router.post('/designer/drafts/:draftId/validate', designerController.validateDraft);
 router.post('/designer/drafts/:draftId/publish', designerController.publishDraft);
 router.delete('/designer/drafts/:draftId', designerController.discardDraft);
+
+// Live Class Monitor & Master Matrix (Admin Observation)
+router.get('/monitor/live', monitorController.getLiveMonitor);
+router.get('/monitor/master-matrix', monitorController.getMasterMatrix);
 
 module.exports = router;

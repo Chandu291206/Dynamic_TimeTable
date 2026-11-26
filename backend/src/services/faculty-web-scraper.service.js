@@ -600,7 +600,7 @@ function mergeMatchedRecords(matches) {
   if (!matches || matches.length === 0) return null;
 
   const merged = {
-    name: matches[0].name,
+    name: null,
     staffId: null,
     designation: null,
     qualification: null,
@@ -611,6 +611,18 @@ function mergeMatchedRecords(matches) {
   };
 
   for (const m of matches) {
+    if (m.name && m.name.trim()) {
+      if (!merged.name) {
+        merged.name = m.name.trim();
+      } else if (
+        /\b(Dr|Prof|Mr|Mrs|Ms|Sri|Smt)\b/i.test(m.name) &&
+        !/\b(Dr|Prof|Mr|Mrs|Ms|Sri|Smt)\b/i.test(merged.name)
+      ) {
+        merged.name = m.name.trim();
+      } else if (m.name.trim().length > merged.name.length && m.name.includes(' ')) {
+        merged.name = m.name.trim();
+      }
+    }
     if (!merged.staffId && m.staffId) merged.staffId = m.staffId;
     if (!merged.designation && m.designation && m.designation.toLowerCase() !== 'faculty') {
       merged.designation = m.designation;
@@ -721,10 +733,16 @@ async function scrapeAndUpdateFaculty({ facultyId = null } = {}) {
       lastScrapedAt: new Date(),
     };
 
-    if (matched.email && !fac.email) updateData.email = matched.email;
+    // Correct faculty name to official directory spelling when matched by staffId
+    if (matched.name && matched.name.trim() && fac.name !== matched.name.trim()) {
+      updateData.name = matched.name.trim();
+      logger.info(`Corrected faculty name for ID ${fac.staffId || matched.staffId}: "${fac.name}" -> "${matched.name.trim()}"`);
+    }
+
+    if (matched.email && (!fac.email || fac.email !== matched.email)) updateData.email = matched.email;
     if (extractedDesig) updateData.designation = extractedDesig;
-    if (matched.department && !fac.department) updateData.department = matched.department;
-    if (matched.qualification && !fac.qualification) updateData.qualification = matched.qualification;
+    if (matched.department && (!fac.department || fac.department !== matched.department)) updateData.department = matched.department;
+    if (matched.qualification && (!fac.qualification || fac.qualification !== matched.qualification)) updateData.qualification = matched.qualification;
     if (matched.staffId && !fac.staffId) updateData.staffId = matched.staffId;
 
     await prisma.faculty.update({
@@ -735,7 +753,9 @@ async function scrapeAndUpdateFaculty({ facultyId = null } = {}) {
     updatedCount += 1;
     details.push({
       id: fac.id,
-      name: fac.name,
+      name: updateData.name || fac.name,
+      previousName: updateData.name ? fac.name : undefined,
+      nameUpdated: Boolean(updateData.name && updateData.name !== fac.name),
       staffId: fac.staffId || matched.staffId,
       matched: true,
       profileSourceUrl: updateData.profileSourceUrl,

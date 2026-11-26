@@ -5,8 +5,14 @@
 
 function normalizeStaffId(staffId) {
   if (!staffId) return null;
-  const clean = String(staffId).trim().toUpperCase().replace(/\s+/g, '');
-  return clean || null;
+  const clean = String(staffId).trim().toUpperCase().replace(/[\s\u00A0]+/g, '');
+  if (!clean) return null;
+  // If purely numeric, strip leading zeroes so "0486" and "486" match seamlessly
+  if (/^\d+$/.test(clean)) {
+    const num = parseInt(clean, 10);
+    return Number.isFinite(num) ? String(num) : clean;
+  }
+  return clean;
 }
 
 function normalizeSubjectCode(code) {

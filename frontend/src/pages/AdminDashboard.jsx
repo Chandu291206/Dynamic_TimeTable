@@ -64,6 +64,13 @@ export default function AdminDashboard() {
           </div>
 
           <div className="admin-header-actions">
+            <Link className="button button--primary" to="/admin/live-monitor" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span className="live-pulsing-dot" aria-hidden="true" style={{ width: '8px', height: '8px' }} />
+              Live Monitor ↗
+            </Link>
+            <Link className="button button--secondary" to="/admin/designer">
+              Designer ↗
+            </Link>
             <Link className="button button--secondary" to="/">
               Public Timetables ↗
             </Link>

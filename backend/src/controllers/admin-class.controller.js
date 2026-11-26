@@ -77,6 +77,8 @@ async function remove(req, res) {
   await prisma.$transaction([
     prisma.timetableOverride.deleteMany({ where: { classId: id } }),
     prisma.timetableSlot.deleteMany({ where: { classId: id } }),
+    prisma.timetableDraftSlot.deleteMany({ where: { draft: { classId: id } } }),
+    prisma.timetableDraft.deleteMany({ where: { classId: id } }),
     prisma.user.updateMany({ where: { classId: id }, data: { classId: null } }),
     prisma.classRoom.delete({ where: { id } }),
   ]);
