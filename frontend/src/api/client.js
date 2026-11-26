@@ -1,6 +1,10 @@
 const TOKEN_KEY = 'tt_auth_token'
 
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
+const PROD_API_BASE = 'https://timetable-backend-hjhq.onrender.com'
+export const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.PROD ? PROD_API_BASE : '')
+).replace(/\/+$/, '')
 
 export function apiUrl(path = '') {
   if (!path) return ''
