@@ -100,11 +100,8 @@ export default function AdminLogin() {
 
         <div className="login-footer-hint">
           <p>
-            Default bootstrap credentials: <code>admin</code> / <code>adminpass</code>
+            Looking for Class Representative workspace? <Link to="/cr/login">CR sign-in</Link>
           </p>
-          {/* <p>
-            Looking for Class Representative workspace? <Link to="/cr/login">CR Sign-in</Link>
-          </p> */}
         </div>
       </div>
     </section>

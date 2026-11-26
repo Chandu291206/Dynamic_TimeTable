@@ -100,9 +100,6 @@ export default function CRLogin() {
 
         <div className="login-footer-hint">
           <p>
-            Default seed credentials: <code>cr1</code> / <code>crpass</code>
-          </p>
-          <p>
             Are you an administrator? <Link to="/admin/login">Admin sign-in</Link>
           </p>
         </div>
