@@ -6,6 +6,7 @@ router.get('/periods', controller.getPeriods);
 router.get('/timetable/:classId/weekly', controller.getWeeklyTimetable);
 router.get('/timetable/:classId/json', controller.getTimetableJson);
 router.get('/timetable/:classId', controller.getTimetable);
+router.get('/faculty-image-proxy', controller.proxyFacultyAvatar);
 router.get('/faculty/:id/image', controller.getFacultyImage);
 
 module.exports = router;

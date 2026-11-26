@@ -1,6 +1,7 @@
 const { z } = require('zod');
 const timetableService = require('../services/timetable.service');
 const { parseDate, todayAsIsoDate } = require('../utils/dates');
+const { fetchImageBuffer } = require('../utils/imageProxy');
 
 const idSchema = z.coerce.number().int().positive();
 
@@ -100,15 +101,47 @@ async function getFacultyImage(req, res) {
   if (!faculty) {
     return res.status(404).json({ success: false, error: { code: 'IMAGE_NOT_FOUND', message: 'Faculty not found' } });
   }
+
+  // Stream upstream image through HTTPS backend to bypass browser mixed-content / SSL certificate errors
   if (faculty.imageSourceUrl) {
-    return res.redirect(302, faculty.imageSourceUrl);
+    try {
+      const { buffer, contentType } = await fetchImageBuffer(faculty.imageSourceUrl);
+      res.set('X-Content-Type-Options', 'nosniff');
+      res.set('Cache-Control', 'public, max-age=86400, s-maxage=604800');
+      return res.type(contentType).send(buffer);
+    } catch {
+      // Upstream failed; fallback to stored image data if available
+    }
   }
-  if (!faculty.imageData || !faculty.imageMimeType) {
-    return res.status(404).json({ success: false, error: { code: 'IMAGE_NOT_FOUND', message: 'Faculty image not found' } });
+
+  if (faculty.imageData && faculty.imageMimeType) {
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('Cache-Control', 'public, max-age=86400, s-maxage=604800');
+    return res.type(faculty.imageMimeType).send(faculty.imageData);
   }
-  res.set('X-Content-Type-Options', 'nosniff');
-  res.set('Cache-Control', 'public, max-age=86400');
-  res.type(faculty.imageMimeType).send(faculty.imageData);
+
+  return res.status(404).json({ success: false, error: { code: 'IMAGE_NOT_FOUND', message: 'Faculty image not found' } });
+}
+
+async function proxyFacultyAvatar(req, res) {
+  const rawUrl = req.query.url;
+  if (!rawUrl) {
+    return res.status(400).json({ success: false, error: { code: 'MISSING_URL', message: 'url query parameter is required' } });
+  }
+
+  try {
+    const parsed = new URL(rawUrl);
+    if (!parsed.hostname.includes('griet.ac.in')) {
+      return res.status(403).json({ success: false, error: { code: 'FORBIDDEN_DOMAIN', message: 'Only GRIET domain images can be proxied' } });
+    }
+
+    const { buffer, contentType } = await fetchImageBuffer(rawUrl);
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('Cache-Control', 'public, max-age=86400, s-maxage=604800');
+    return res.type(contentType).send(buffer);
+  } catch (err) {
+    return res.status(502).json({ success: false, error: { code: 'PROXY_FAILED', message: err.message } });
+  }
 }
 
 async function getPeriods(req, res) {
@@ -117,4 +150,12 @@ async function getPeriods(req, res) {
   return res.json({ success: true, data: periods });
 }
 
-module.exports = { getClasses, getPeriods, getTimetable, getWeeklyTimetable, getTimetableJson, getFacultyImage };
+module.exports = {
+  getClasses,
+  getPeriods,
+  getTimetable,
+  getWeeklyTimetable,
+  getTimetableJson,
+  getFacultyImage,
+  proxyFacultyAvatar,
+};

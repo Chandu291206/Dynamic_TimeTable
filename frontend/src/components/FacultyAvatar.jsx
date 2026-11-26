@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { apiUrl } from '../api/client.js'
 
 function initials(name) {
   return (name || 'TBA')
@@ -12,7 +13,19 @@ function initials(name) {
 
 export default function FacultyAvatar({ faculty, size = 'small' }) {
   const [imgError, setImgError] = useState(false)
-  const imageSrc = faculty?.imageSourceUrl || faculty?.imageUrl
+
+  // Route through HTTPS backend proxy to bypass browser mixed-content & unverified TLS certificate blocks
+  let imageSrc = null
+  if (faculty?.id) {
+    imageSrc = apiUrl(`/api/faculty/${faculty.id}/image`)
+  } else if (faculty?.imageSourceUrl || faculty?.imageUrl) {
+    const rawUrl = faculty.imageSourceUrl || faculty.imageUrl
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+      imageSrc = apiUrl(`/api/faculty-image-proxy?url=${encodeURIComponent(rawUrl)}`)
+    } else {
+      imageSrc = apiUrl(rawUrl)
+    }
+  }
 
   useEffect(() => {
     setImgError(false)
