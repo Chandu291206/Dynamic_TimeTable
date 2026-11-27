@@ -119,7 +119,7 @@ export default function TimetablePage() {
                 alignItems: 'center',
                 gap: '0.35rem',
                 padding: '0.45rem 0.85rem',
-                borderRadius: '999px',
+                borderRadius: '3px',
                 border: isDefaultClass ? '1px solid #d97706' : '1px solid #cbbda8',
                 background: isDefaultClass ? '#fef3c7' : '#ffffff',
                 color: isDefaultClass ? '#92400e' : '#3d362e',
