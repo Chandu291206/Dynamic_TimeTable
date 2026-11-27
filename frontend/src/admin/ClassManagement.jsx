@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { clearClassTimetable, createClass, deleteClass, getAdminClasses, updateClass } from '../api/admin.js'
 import UploadTimetableModal from './UploadTimetableModal.jsx'
@@ -14,6 +14,19 @@ export default function ClassManagement() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const filteredClasses = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return classes
+    return classes.filter((cls) => {
+      const haystack = [cls.label, cls.branch, cls.section, `year ${cls.year}`, `sec ${cls.section}`]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [classes, searchQuery])
 
   const loadClasses = async () => {
     setLoading(true)
@@ -236,8 +249,30 @@ export default function ClassManagement() {
           <div className="admin-card">
             <header className="admin-card-header">
               <h3>Institutional Classes</h3>
-              <span className="badge-count">{classes.length} active</span>
+              <span className="badge-count">
+                {searchQuery.trim() ? `${filteredClasses.length} / ${classes.length}` : `${classes.length} active`}
+              </span>
             </header>
+
+            {!loading && classes.length > 0 && (
+              <div className="faculty-filter-bar" role="search" aria-label="Search classes" style={{ marginBottom: '0.75rem' }}>
+                <div className="faculty-filter-search">
+                  <input
+                    type="search"
+                    className="text-input"
+                    placeholder="Search by class label, year, branch, or section…"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    aria-label="Search classes"
+                  />
+                </div>
+                {searchQuery.trim() && (
+                  <button type="button" className="text-button" onClick={() => setSearchQuery('')}>
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
 
             {loading ? (
               <div className="schedule-state schedule-loading">
@@ -247,6 +282,10 @@ export default function ClassManagement() {
             ) : classes.length === 0 ? (
               <div className="admin-empty-card">
                 <p>No classes registered yet. Create your first academic class.</p>
+              </div>
+            ) : filteredClasses.length === 0 ? (
+              <div className="admin-empty-card">
+                <p>No classes match "{searchQuery}".</p>
               </div>
             ) : (
               <div className="admin-table-wrapper admin-table-scroll">
@@ -261,7 +300,7 @@ export default function ClassManagement() {
                     </tr>
                   </thead>
                   <tbody>
-                    {classes.map((cls) => (
+                    {filteredClasses.map((cls) => (
                       <tr key={cls.id}>
                         <td><b>{cls.label}</b></td>
                         <td>Year {cls.year}</td>

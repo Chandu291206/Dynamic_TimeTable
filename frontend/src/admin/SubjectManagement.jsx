@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createSubject, deleteSubject, getAdminSubjects, updateSubject } from '../api/admin.js'
 
 export default function SubjectManagement() {
@@ -12,6 +12,16 @@ export default function SubjectManagement() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const filteredSubjects = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return subjects
+    return subjects.filter((sub) => {
+      const haystack = [sub.code, sub.name, `#${sub.id}`].filter(Boolean).join(' ').toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [subjects, searchQuery])
 
   const loadSubjects = async () => {
     setLoading(true)
@@ -214,8 +224,30 @@ export default function SubjectManagement() {
           <div className="admin-card">
             <header className="admin-card-header">
               <h3>Existing Subjects</h3>
-              <span className="badge-count">{subjects.length} total</span>
+              <span className="badge-count">
+                {searchQuery.trim() ? `${filteredSubjects.length} / ${subjects.length}` : `${subjects.length} total`}
+              </span>
             </header>
+
+            {!loading && subjects.length > 0 && (
+              <div className="faculty-filter-bar" role="search" aria-label="Search subjects" style={{ marginBottom: '0.75rem' }}>
+                <div className="faculty-filter-search">
+                  <input
+                    type="search"
+                    className="text-input"
+                    placeholder="Search by subject code, name, or ID…"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    aria-label="Search subjects"
+                  />
+                </div>
+                {searchQuery.trim() && (
+                  <button type="button" className="text-button" onClick={() => setSearchQuery('')}>
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
 
             {loading ? (
               <div className="schedule-state schedule-loading">
@@ -225,6 +257,10 @@ export default function SubjectManagement() {
             ) : subjects.length === 0 ? (
               <div className="admin-empty-card">
                 <p>No subjects added yet. Create your first subject using the form.</p>
+              </div>
+            ) : filteredSubjects.length === 0 ? (
+              <div className="admin-empty-card">
+                <p>No subjects match "{searchQuery}".</p>
               </div>
             ) : (
               <div className="admin-table-wrapper admin-table-scroll">
@@ -238,7 +274,7 @@ export default function SubjectManagement() {
                     </tr>
                   </thead>
                   <tbody>
-                    {subjects.map((sub) => (
+                    {filteredSubjects.map((sub) => (
                       <tr key={sub.id}>
                         <td><code>#{sub.id}</code></td>
                         <td><code>{sub.code || '—'}</code></td>
