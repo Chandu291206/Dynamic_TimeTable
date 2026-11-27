@@ -906,7 +906,8 @@ input[type="date"]::-webkit-inner-spin-button {
   display: flex;
   align-items: center;
   gap: .75rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 /* Tab Navigation */
@@ -1357,6 +1358,7 @@ input[type="date"]::-webkit-inner-spin-button {
   }
   .admin-header-actions {
     width: 100%;
+    flex-wrap: wrap;
   }
   .admin-header-actions .button {
     flex: 1;

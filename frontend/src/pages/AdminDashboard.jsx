@@ -10,13 +10,13 @@ import TimetableDesigner from '../admin/TimetableDesigner.jsx'
 import useAuth from '../hooks/useAuth.js'
 
 const TABS = [
-  { id: 'designer', label: 'Timetable Designer', icon: '🎨' },
   { id: 'faculty', label: 'Faculty Directory', icon: '👥' },
   { id: 'subjects', label: 'Subjects', icon: '📚' },
   { id: 'classes', label: 'Classes', icon: '🏛' },
   { id: 'slots', label: 'Timetable Slots', icon: '⏱' },
   { id: 'logs', label: 'Timetable Logs', icon: '📋' },
   { id: 'crs', label: 'CR Accounts', icon: '🎓' },
+  { id: 'designer', label: 'Timetable Designer', icon: '🎨' },
 ]
 
 export default function AdminDashboard() {
@@ -67,9 +67,6 @@ export default function AdminDashboard() {
             <Link className="button button--primary" to="/admin/live-monitor" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
               <span className="live-pulsing-dot" aria-hidden="true" style={{ width: '8px', height: '8px' }} />
               Live Monitor ↗
-            </Link>
-            <Link className="button button--secondary" to="/admin/designer">
-              Designer ↗
             </Link>
             <Link className="button button--secondary" to="/">
               Public Timetables ↗
