@@ -9,6 +9,7 @@ import DesignerPage from './pages/DesignerPage.jsx'
 import LiveMonitorPage from './pages/LiveMonitorPage.jsx'
 import CRDashboard from './pages/CRDashboard.jsx'
 import CRLogin from './pages/CRLogin.jsx'
+import FacultyDashboard from './pages/FacultyDashboard.jsx'
 import AllTimetablesPage from './pages/AllTimetablesPage.jsx'
 import HomePage from './pages/HomePage.jsx'
 import PlaceholderPage from './pages/PlaceholderPage.jsx'
@@ -28,6 +29,7 @@ function App() {
               <Route path="/timetable/:classId" element={<TimetablePage />} />
               <Route path="/cr/login" element={<CRLogin />} />
               <Route path="/cr/dashboard" element={<CRDashboard />} />
+              <Route path="/faculty/dashboard" element={<FacultyDashboard />} />
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
               <Route path="/admin/designer" element={<DesignerPage />} />

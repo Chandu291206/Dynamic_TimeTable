@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import FacultyDetailsDialog from '../components/FacultyDetailsDialog.jsx'
 import TimetableGrid from '../components/TimetableGrid.jsx'
 import TimetableSkeleton from '../components/TimetableSkeleton.jsx'
 import WeeklyTimetableGrid from '../components/WeeklyTimetableGrid.jsx'
 import useTimetable from '../hooks/useTimetable.js'
 import useWeeklyTimetable from '../hooks/useWeeklyTimetable.js'
+import { clearDefaultClassId, getDefaultClassId, setDefaultClassId } from '../utils/defaultClass.js'
 
 function todayIso() {
   const date = new Date()
@@ -47,11 +48,33 @@ function isCurrentWeek(startStr, endStr) {
 
 export default function TimetablePage() {
   const { classId } = useParams()
+  const navigate = useNavigate()
   const [viewMode, setViewMode] = useState('day') // 'day' | 'week'
   const [date, setDate] = useState(todayIso)
   const [selectedSlot, setSelectedSlot] = useState(null)
   const [selectedSlotDay, setSelectedSlotDay] = useState('')
+  const [defaultClassId, setDefaultClassState] = useState(() => getDefaultClassId())
   const triggerRef = useRef(null)
+
+  const isDefaultClass = String(defaultClassId) === String(classId)
+
+  const handleToggleDefault = () => {
+    if (isDefaultClass) {
+      clearDefaultClassId()
+      setDefaultClassState(null)
+    } else {
+      setDefaultClassId(classId)
+      setDefaultClassState(String(classId))
+    }
+  }
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1)
+    } else {
+      navigate('/timetables')
+    }
+  }
 
   const daily = useTimetable(viewMode === 'day' ? classId : null, date)
   const weekly = useWeeklyTimetable(viewMode === 'week' ? classId : null, date)
@@ -81,11 +104,37 @@ export default function TimetablePage() {
     <section className={`timetable-page ${viewMode === 'week' ? 'timetable-page--week' : ''}`} aria-labelledby="timetable-heading">
       <div className={`timetable-wrap ${viewMode === 'week' ? 'timetable-wrap--week' : ''}`}>
         <div className="timetable-top-bar">
-          <Link className="back-link" to="/">
-            ← All classes
-          </Link>
+          <button type="button" className="back-link" onClick={handleBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+            ← Back
+          </button>
 
-          <div className="view-mode-toggle" role="tablist" aria-label="Timetable view mode">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={handleToggleDefault}
+              aria-pressed={isDefaultClass}
+              title={isDefaultClass ? 'Remove as default startup class' : 'Open this class automatically next time'}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                padding: '0.45rem 0.85rem',
+                borderRadius: '999px',
+                border: isDefaultClass ? '1px solid #d97706' : '1px solid #cbbda8',
+                background: isDefaultClass ? '#fef3c7' : '#ffffff',
+                color: isDefaultClass ? '#92400e' : '#3d362e',
+                fontWeight: 600,
+                fontSize: '0.84rem',
+                cursor: 'pointer',
+              }}
+            >
+              <span aria-hidden="true" style={{ fontSize: '1rem', color: isDefaultClass ? '#d97706' : '#8c8070' }}>
+                {isDefaultClass ? '★' : '☆'}
+              </span>
+              <span>{isDefaultClass ? 'Default class' : 'Mark as default'}</span>
+            </button>
+
+            <div className="view-mode-toggle" role="tablist" aria-label="Timetable view mode">
             <button
               type="button"
               role="tab"
@@ -104,6 +153,7 @@ export default function TimetablePage() {
             >
               Entire week
             </button>
+            </div>
           </div>
         </div>
 

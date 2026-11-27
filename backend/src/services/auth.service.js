@@ -9,11 +9,12 @@ function safeUser(user) {
     username: user.username,
     role: user.role,
     classId: user.classId,
+    facultyId: user.facultyId || null,
   };
 }
 
 function createToken(user) {
-  return jwt.sign({ role: user.role, classId: user.classId }, jwtSecret, {
+  return jwt.sign({ role: user.role, classId: user.classId, facultyId: user.facultyId || null }, jwtSecret, {
     subject: String(user.id),
     expiresIn: jwtExpiresIn,
   });

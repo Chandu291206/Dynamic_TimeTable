@@ -9,7 +9,7 @@ export default function DesignerPage() {
   const { user, loading: authLoading, logout } = useAuth()
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'ADMIN')) {
+    if (!authLoading && (!user || (user.role !== 'ADMIN' && user.role !== 'HOD'))) {
       navigate('/admin/login', { replace: true })
     }
   }, [authLoading, user, navigate])
@@ -42,7 +42,7 @@ export default function DesignerPage() {
             <div className="admin-assigned-tag">
               <span>Signed in as:</span>
               <b>{user?.username || 'Administrator'}</b>
-              <span className="role-tag">Superadmin</span>
+              <span className="role-tag">{user?.role === 'HOD' ? 'HOD' : 'Superadmin'}</span>
             </div>
           </div>
 

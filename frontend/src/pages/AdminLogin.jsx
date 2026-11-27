@@ -12,8 +12,10 @@ export default function AdminLogin() {
 
   useEffect(() => {
     if (!authLoading && user) {
-      if (user.role === 'ADMIN') {
+      if (user.role === 'ADMIN' || user.role === 'HOD') {
         navigate('/admin/dashboard', { replace: true })
+      } else if (user.role === 'FACULTY') {
+        navigate('/faculty/dashboard', { replace: true })
       } else if (user.role === 'CR') {
         navigate('/cr/dashboard', { replace: true })
       }
@@ -31,9 +33,12 @@ export default function AdminLogin() {
     setError('')
     try {
       const session = await login(username.trim(), password)
-      if (session?.user?.role === 'ADMIN') {
+      const role = session?.user?.role
+      if (role === 'ADMIN' || role === 'HOD') {
         navigate('/admin/dashboard')
-      } else if (session?.user?.role === 'CR') {
+      } else if (role === 'FACULTY') {
+        navigate('/faculty/dashboard')
+      } else if (role === 'CR') {
         navigate('/cr/dashboard')
       } else {
         navigate('/')

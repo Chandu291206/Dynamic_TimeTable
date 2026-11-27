@@ -15,7 +15,7 @@ const TABS = [
   { id: 'classes', label: 'Classes', icon: '🏛' },
   { id: 'slots', label: 'Timetable Slots', icon: '⏱' },
   { id: 'logs', label: 'Timetable Logs', icon: '📋' },
-  { id: 'crs', label: 'CR Accounts', icon: '🎓' },
+  { id: 'crs', label: 'Manage Accounts', icon: '🎓' },
   { id: 'designer', label: 'Timetable Designer', icon: '🎨' },
 ]
 
@@ -25,8 +25,14 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('faculty')
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'ADMIN')) {
-      navigate('/admin/login', { replace: true })
+    if (!authLoading && (!user || (user.role !== 'ADMIN' && user.role !== 'HOD'))) {
+      if (user?.role === 'FACULTY') {
+        navigate('/faculty/dashboard', { replace: true })
+      } else if (user?.role === 'CR') {
+        navigate('/cr/dashboard', { replace: true })
+      } else {
+        navigate('/admin/login', { replace: true })
+      }
     }
   }, [authLoading, user, navigate])
 
@@ -59,7 +65,7 @@ export default function AdminDashboard() {
             <div className="admin-assigned-tag">
               <span>Signed in as:</span>
               <b>{user?.username || 'Administrator'}</b>
-              <span className="role-tag">Superadmin</span>
+              <span className="role-tag">{user?.role === 'HOD' ? 'HOD' : 'Superadmin'}</span>
             </div>
           </div>
 

@@ -43,6 +43,127 @@ function resolveElectiveTag(subject, electiveMap) {
   return electiveMap.get((subject.code || '').toUpperCase()) || electiveMap.get((subject.name || '').toUpperCase()) || null;
 }
 
+function buildClassCourseFallbackMap(metadata) {
+  const map = new Map();
+  const courses = metadata?.courses || [];
+  for (const c of courses) {
+    const tag = extractElectiveTag(c.shortform) || extractElectiveTag(c.course_name) || extractElectiveTag(c.course_code);
+    const facultyInfo = typeof c.faculty === 'string'
+      ? (c.faculty.trim() ? { name: c.faculty.trim(), staffId: c.staff_id || null } : null)
+      : (Array.isArray(c.faculty) && c.faculty[0]?.name
+        ? { name: c.faculty[0].name.trim(), staffId: c.faculty[0].staff_id || null }
+        : null);
+
+    const entry = {
+      course_code: c.course_code || null,
+      shortform: c.shortform || null,
+      course_name: c.course_name || null,
+      electiveTag: tag || null,
+      facultyInfo,
+    };
+
+    const keys = new Set();
+    if (c.shortform) keys.add(c.shortform.trim().toUpperCase());
+    if (c.course_name) keys.add(c.course_name.trim().toUpperCase());
+    if (c.course_code) keys.add(c.course_code.trim().toUpperCase());
+    if (tag) {
+      keys.add(tag);
+      const baseType = tag.split('-')[0];
+      if (baseType && !map.has(baseType)) keys.add(baseType);
+    }
+    for (const k of keys) {
+      if (!map.has(k)) map.set(k, entry);
+    }
+  }
+  return map;
+}
+
+function isGenericElectiveLabel(text) {
+  if (!text) return false;
+  return /^(PE|OE)(\s*[-:]?\s*([0-9IVXLCDM]+|NPTEL))?$/i.test(String(text).trim());
+}
+
+async function resolveFallbackFacultyMap(courseFallbackMap) {
+  const staffIds = [];
+  const names = [];
+  for (const entry of courseFallbackMap.values()) {
+    if (entry.facultyInfo?.staffId) staffIds.push(String(entry.facultyInfo.staffId).trim());
+    if (entry.facultyInfo?.name) names.push(entry.facultyInfo.name.trim());
+  }
+  if (staffIds.length === 0 && names.length === 0) return new Map();
+
+  const records = await prisma.faculty.findMany({
+    where: {
+      OR: [
+        ...(staffIds.length > 0 ? [{ staffId: { in: staffIds } }] : []),
+        ...(names.length > 0 ? [{ name: { in: names, mode: 'insensitive' } }] : []),
+      ],
+    },
+  });
+
+  const lookup = new Map();
+  for (const r of records) {
+    if (r.staffId) lookup.set(`id:${r.staffId.trim().toUpperCase()}`, r);
+    if (r.name) lookup.set(`name:${r.name.trim().toLowerCase()}`, r);
+  }
+  return lookup;
+}
+
+function resolveSlotWithCourseFallback(slot, override, electiveMap, courseFallbackMap, facultyLookup) {
+  const baseSubject = override ? override.subject : slot.subject;
+  const baseFaculty = override ? override.faculty : slot.faculty;
+  const baseBatchBFaculty = override ? override.batchBFaculty : slot.batchBFaculty;
+
+  let subject = subjectPayload(baseSubject, electiveMap);
+  let faculty = facultyPayload(baseFaculty);
+
+  if (!override && baseSubject && (!baseFaculty || isGenericElectiveLabel(baseSubject.code) || isGenericElectiveLabel(baseSubject.name))) {
+    const tag = resolveElectiveTag(baseSubject, electiveMap);
+    const fallback =
+      courseFallbackMap.get((baseSubject.code || '').trim().toUpperCase()) ||
+      courseFallbackMap.get((baseSubject.name || '').trim().toUpperCase()) ||
+      (tag ? courseFallbackMap.get(tag) : null) ||
+      (tag ? courseFallbackMap.get(tag.split('-')[0]) : null);
+
+    if (fallback) {
+      if (isGenericElectiveLabel(baseSubject.name) && fallback.course_name) {
+        subject = {
+          ...subject,
+          code: fallback.shortform || subject.code,
+          name: fallback.course_name,
+          electiveTag: subject.electiveTag || fallback.electiveTag || null,
+        };
+      }
+      if (!faculty && fallback.facultyInfo) {
+        const matchedRecord =
+          (fallback.facultyInfo.staffId && facultyLookup.get(`id:${String(fallback.facultyInfo.staffId).trim().toUpperCase()}`)) ||
+          (fallback.facultyInfo.name && facultyLookup.get(`name:${fallback.facultyInfo.name.trim().toLowerCase()}`)) ||
+          null;
+        faculty = matchedRecord
+          ? facultyPayload(matchedRecord)
+          : {
+            id: null,
+            name: fallback.facultyInfo.name,
+            staffId: fallback.facultyInfo.staffId || null,
+            designation: null,
+            department: null,
+            qualification: null,
+            email: null,
+            profileSourceUrl: null,
+            imageSourceUrl: null,
+            imageUrl: null,
+          };
+      }
+    }
+  }
+
+  return {
+    subject,
+    faculty,
+    batchBFaculty: facultyPayload(baseBatchBFaculty),
+  };
+}
+
 function subjectPayload(subj, electiveMap) {
   if (!subj) return null;
   const electiveTag = resolveElectiveTag(subj, electiveMap);
@@ -93,28 +214,33 @@ async function getTimetable(classId, date) {
     include: { subject: true, faculty: true, batchBFaculty: true },
   });
   const electiveMap = buildClassElectiveMap(classRoom.metadata);
+  const courseFallbackMap = buildClassCourseFallbackMap(classRoom.metadata);
+  const facultyLookup = await resolveFallbackFacultyMap(courseFallbackMap);
   const resolvedSlots = applyOverrides(slots, overrides);
 
   return {
     class: { id: classRoom.id, label: classLabel(classRoom) },
     date: date.toISOString().slice(0, 10),
     day,
-    slots: resolvedSlots.map(({ override, ...slot }) => ({
-      id: slot.id,
-      startTime: slot.startTime,
-      endTime: slot.endTime,
-      room: resolveSlotRoom(override || slot, classRoom.metadata, DAY_NAMES[day]),
-      subject: override ? subjectPayload(override.subject, electiveMap) : subjectPayload(slot.subject, electiveMap),
-      faculty: override ? facultyPayload(override.faculty) : facultyPayload(slot.faculty),
-      batchBFaculty: override ? facultyPayload(override.batchBFaculty) : facultyPayload(slot.batchBFaculty),
-      isOverride: Boolean(override),
-      override: override ? {
-        id: override.id,
-        startTime: override.startTime,
-        endTime: override.endTime,
-        createdAt: override.createdAt,
-      } : null,
-    })),
+    slots: resolvedSlots.map(({ override, ...slot }) => {
+      const resolved = resolveSlotWithCourseFallback(slot, override, electiveMap, courseFallbackMap, facultyLookup);
+      return {
+        id: slot.id,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        room: resolveSlotRoom(override || slot, classRoom.metadata, DAY_NAMES[day]),
+        subject: resolved.subject,
+        faculty: resolved.faculty,
+        batchBFaculty: resolved.batchBFaculty,
+        isOverride: Boolean(override),
+        override: override ? {
+          id: override.id,
+          startTime: override.startTime,
+          endTime: override.endTime,
+          createdAt: override.createdAt,
+        } : null,
+      };
+    }),
   };
 }
 
@@ -149,6 +275,8 @@ async function getWeeklyTimetable(classId, referenceDate) {
   const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   const electiveMap = buildClassElectiveMap(classRoom.metadata);
+  const courseFallbackMap = buildClassCourseFallbackMap(classRoom.metadata);
+  const facultyLookup = await resolveFallbackFacultyMap(courseFallbackMap);
   const days = [];
   for (let dayIndex = 0; dayIndex <= 5; dayIndex++) {
     const dayDate = new Date(monday);
@@ -163,22 +291,25 @@ async function getWeeklyTimetable(classId, referenceDate) {
       day: dayIndex,
       dayName: DAY_NAMES[dayIndex],
       date: dayDateStr,
-      slots: resolvedSlots.map(({ override, ...slot }) => ({
-        id: slot.id,
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-        room: resolveSlotRoom(override || slot, classRoom.metadata, DAY_NAMES[dayIndex]),
-        subject: override ? subjectPayload(override.subject, electiveMap) : subjectPayload(slot.subject, electiveMap),
-        faculty: override ? facultyPayload(override.faculty) : facultyPayload(slot.faculty),
-        batchBFaculty: override ? facultyPayload(override.batchBFaculty) : facultyPayload(slot.batchBFaculty),
-        isOverride: Boolean(override),
-        override: override ? {
-          id: override.id,
-          startTime: override.startTime,
-          endTime: override.endTime,
-          createdAt: override.createdAt,
-        } : null,
-      })),
+      slots: resolvedSlots.map(({ override, ...slot }) => {
+        const res = resolveSlotWithCourseFallback(slot, override, electiveMap, courseFallbackMap, facultyLookup);
+        return {
+          id: slot.id,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          room: resolveSlotRoom(override || slot, classRoom.metadata, DAY_NAMES[dayIndex]),
+          subject: res.subject,
+          faculty: res.faculty,
+          batchBFaculty: res.batchBFaculty,
+          isOverride: Boolean(override),
+          override: override ? {
+            id: override.id,
+            startTime: override.startTime,
+            endTime: override.endTime,
+            createdAt: override.createdAt,
+          } : null,
+        };
+      }),
     });
   }
 

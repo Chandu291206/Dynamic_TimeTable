@@ -9,6 +9,8 @@ datasource db {
 
 enum UserRole {
   ADMIN
+  HOD
+  FACULTY
   CR
 }
 
@@ -35,6 +37,7 @@ model Faculty {
   batchBOverrides  TimetableOverride[] @relation("OverrideFacultyB")
   draftSlots       TimetableDraftSlot[] @relation("DraftSlotFacultyA")
   batchBDraftSlots TimetableDraftSlot[] @relation("DraftSlotFacultyB")
+  users            User[]
 
   @@index([name])
 }
@@ -152,18 +155,21 @@ model TimetableOverride {
 }
 
 model User {
-  id           Int        @id @default(autoincrement())
-  username     String     @unique
-  passwordHash String
-  role         UserRole
-  isActive     Boolean    @default(true)
-  classId      Int?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id            Int                  @id @default(autoincrement())
+  username      String               @unique
+  passwordHash  String
+  role          UserRole
+  isActive      Boolean              @default(true)
+  classId       Int?
+  facultyId     Int?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
   class         ClassRoom?           @relation(fields: [classId], references: [id], onDelete: SetNull)
+  faculty       Faculty?             @relation(fields: [facultyId], references: [id], onDelete: SetNull)
   createdDrafts TimetableDraft[]
 
   @@index([role, classId])
+  @@index([facultyId])
 }
 
 model TimetableDraft {

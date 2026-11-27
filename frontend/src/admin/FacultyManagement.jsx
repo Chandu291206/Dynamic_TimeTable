@@ -504,7 +504,7 @@ export default function FacultyManagement() {
           <p>Try adjusting your search query or clearing the active filters.</p>
         </div>
       ) : (
-        <div className="admin-table-wrapper">
+        <div className="admin-table-wrapper admin-table-scroll">
           <table className="admin-table">
             <thead>
               <tr>

@@ -59,10 +59,12 @@ export default function Navbar() {
           ) : (
             <NavLink to="/cr/login">CR Login</NavLink>
           )}
-          {user?.role === 'ADMIN' ? (
-            <NavLink to="/admin/dashboard">Admin Dashboard</NavLink>
+          {(user?.role === 'ADMIN' || user?.role === 'HOD') ? (
+            <NavLink to="/admin/dashboard">{user.role === 'HOD' ? 'HOD Console' : 'Admin Console'}</NavLink>
+          ) : user?.role === 'FACULTY' ? (
+            <NavLink to="/faculty/dashboard">Faculty Dashboard</NavLink>
           ) : (
-            <NavLink to="/admin/login">Admin Login</NavLink>
+            <NavLink to="/admin/login">Faculty Login</NavLink>
           )}
           <span className="api-status" data-state={state} role="status">
             <i className="status-dot" aria-hidden="true" />

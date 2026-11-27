@@ -37,12 +37,17 @@ export const createSlot = (data, options) => apiPost('/api/admin/slots', data, o
 export const updateSlot = (id, data, options) => apiPut(`/api/admin/slots/${id}`, data, options)
 export const deleteSlot = (id, options) => apiDelete(`/api/admin/slots/${id}`, options)
 
-// CRs
+// Accounts (CR, Faculty, HOD)
 export const getAdminCRs = (options) => apiGet('/api/admin/crs', options)
 export const createCR = (data, options) => apiPost('/api/admin/crs', data, options)
 export const updateCR = (id, data, options) => apiPut(`/api/admin/crs/${id}`, data, options)
 export const assignCRClass = (id, classId, options) => apiPut(`/api/admin/crs/${id}/class`, { classId }, options)
 export const deleteCR = (id, options) => apiDelete(`/api/admin/crs/${id}`, options)
+
+export const getAdminAccounts = (options) => apiGet('/api/admin/accounts', options)
+export const createAccount = (data, options) => apiPost('/api/admin/accounts', data, options)
+export const updateAccount = (id, data, options) => apiPut(`/api/admin/accounts/${id}`, data, options)
+export const deleteAccount = (id, options) => apiDelete(`/api/admin/accounts/${id}`, options)
 
 // Logs
 export const getTimetableLogs = (options) => apiGet('/api/admin/logs', options)

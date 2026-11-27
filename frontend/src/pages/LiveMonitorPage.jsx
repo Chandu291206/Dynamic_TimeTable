@@ -53,7 +53,7 @@ export default function LiveMonitorPage() {
 
   // Auth gate
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'ADMIN')) {
+    if (!authLoading && (!user || (user.role !== 'ADMIN' && user.role !== 'HOD'))) {
       navigate('/admin/login', { replace: true })
     }
   }, [authLoading, user, navigate])

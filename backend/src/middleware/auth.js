@@ -54,11 +54,12 @@ function requireRole(...roles) {
 }
 
 const requireCR = requireRole('CR');
-const requireAdmin = requireRole('ADMIN');
-const requireAdminOrCR = requireRole('ADMIN', 'CR');
+const requireFaculty = requireRole('FACULTY');
+const requireAdmin = requireRole('ADMIN', 'HOD');
+const requireAdminOrCR = requireRole('ADMIN', 'HOD', 'CR');
 
 function requireCRClassAccess(req, res, next) {
-  if (req.user?.role === 'ADMIN') return next();
+  if (req.user?.role === 'ADMIN' || req.user?.role === 'HOD') return next();
   const requestedClassId = Number(req.params.classId || req.body?.classId || req.query.classId);
   if (req.user?.role !== 'CR' || !Number.isInteger(requestedClassId) || requestedClassId !== req.user.classId) {
     return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'You do not have access to this class' } });
@@ -66,4 +67,4 @@ function requireCRClassAccess(req, res, next) {
   return next();
 }
 
-module.exports = { authenticateJWT, requireCR, requireAdmin, requireAdminOrCR, requireCRClassAccess };
+module.exports = { authenticateJWT, requireCR, requireFaculty, requireAdmin, requireAdminOrCR, requireCRClassAccess };

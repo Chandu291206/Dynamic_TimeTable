@@ -1,12 +1,21 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { getClasses } from '../api/public.js'
+import { getDefaultClassId } from '../utils/defaultClass.js'
 
 export default function HomePage() {
+  const navigate = useNavigate()
   const [classCount, setClassCount] = useState(0)
   const [status, setStatus] = useState('loading')
+  const defaultClassId = getDefaultClassId()
 
   useEffect(() => {
+    if (defaultClassId && !sessionStorage.getItem('tt_default_redirected')) {
+      sessionStorage.setItem('tt_default_redirected', '1')
+      navigate(`/timetable/${defaultClassId}`, { replace: true })
+      return
+    }
+
     const controller = new AbortController()
     getClasses({ signal: controller.signal })
       .then((resData) => {
@@ -18,7 +27,7 @@ export default function HomePage() {
         if (!controller.signal.aborted) setStatus('ready')
       })
     return () => controller.abort()
-  }, [])
+  }, [defaultClassId, navigate])
 
   return (
     <section className="home" aria-labelledby="welcome-heading">
@@ -43,9 +52,16 @@ export default function HomePage() {
               </span>
             )}
           </div>
-          <Link className="button button--cta" to="/timetables">
-            View all timetables <span aria-hidden="true">→</span>
-          </Link>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-end' }}>
+            <Link className="button button--cta" to="/timetables">
+              View all timetables <span aria-hidden="true">→</span>
+            </Link>
+            {defaultClassId && (
+              <Link className="text-link" to={`/timetable/${defaultClassId}`} style={{ fontSize: '0.88rem' }}>
+                ★ Open my default timetable →
+              </Link>
+            )}
+          </div>
         </div>
 
         <div className="fact-strip" aria-label="Service highlights">

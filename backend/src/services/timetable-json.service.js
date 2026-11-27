@@ -203,40 +203,47 @@ async function importTimetableJson(rawJson, { db = prisma } = {}) {
     };
 
     subjectMap.set(primaryCode, mapping);
-    if (course.shortform) {
-      const sf = course.shortform.trim().toUpperCase();
-      subjectMap.set(sf, mapping);
+    const romanArabicMap = [
+      ['PE-I', 'PE-1'], ['PE-II', 'PE-2'], ['PE-III', 'PE-3'], ['PE-IV', 'PE-4'],
+      ['OE-I', 'OE-1'], ['OE-II', 'OE-2'], ['OE-III', 'OE-3'], ['OE-IV', 'OE-4'],
+    ];
 
-      // Handle elective aliases: PE-I <-> PE-1, OE-I <-> OE-1, etc.
-      const romanArabicMap = [
-        ['PE-I', 'PE-1'], ['PE-II', 'PE-2'], ['PE-III', 'PE-3'], ['PE-IV', 'PE-4'],
-        ['OE-I', 'OE-1'], ['OE-II', 'OE-2'], ['OE-III', 'OE-3'], ['OE-IV', 'OE-4'],
-      ];
+    const registerTextAliases = (rawText) => {
+      if (!rawText) return;
+      const upper = rawText.trim().toUpperCase();
+      subjectMap.set(upper, mapping);
+
       for (const [roman, arabic] of romanArabicMap) {
-        if (sf === roman || sf === arabic) {
+        if (upper === roman || upper === arabic || upper.includes(`(${roman})`) || upper.includes(`(${arabic})`)) {
           subjectMap.set(roman, mapping);
           subjectMap.set(arabic, mapping);
         }
       }
 
-      // Handle parenthetical elective forms like "CC (PE-I)" or "NNDL (PE-III)"
-      const parenMatch = sf.match(/^(.+?)\s*\(([^)]+)\)$/);
+      const parenMatch = upper.match(/^(.+?)\s*\(([^)]+)\)$/);
       if (parenMatch) {
         const baseName = parenMatch[1].trim();
-        const electiveTag = parenMatch[2].trim();
+        const innerTag = parenMatch[2].trim();
         subjectMap.set(baseName, mapping);
-        subjectMap.set(electiveTag, mapping);
+        subjectMap.set(innerTag, mapping);
         for (const [roman, arabic] of romanArabicMap) {
-          if (electiveTag === roman || electiveTag === arabic) {
+          if (innerTag === roman || innerTag === arabic) {
             subjectMap.set(roman, mapping);
             subjectMap.set(arabic, mapping);
           }
         }
       }
-    }
-    if (course.course_name) {
-      subjectMap.set(course.course_name.trim().toUpperCase(), mapping);
-    }
+
+      if (/\bPE\b/i.test(upper) && !subjectMap.has('PE')) {
+        subjectMap.set('PE', mapping);
+      }
+      if (/\bOE\b/i.test(upper) && !subjectMap.has('OE')) {
+        subjectMap.set('OE', mapping);
+      }
+    };
+
+    registerTextAliases(course.shortform);
+    registerTextAliases(course.course_name);
     if (course.course_code) {
       subjectMap.set(course.course_code.trim().toUpperCase(), mapping);
     }
