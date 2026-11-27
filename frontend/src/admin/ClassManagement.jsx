@@ -249,7 +249,7 @@ export default function ClassManagement() {
                 <p>No classes registered yet. Create your first academic class.</p>
               </div>
             ) : (
-              <div className="admin-table-wrapper">
+              <div className="admin-table-wrapper admin-table-scroll">
                 <table className="admin-table">
                   <thead>
                     <tr>

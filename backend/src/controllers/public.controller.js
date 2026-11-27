@@ -1,7 +1,7 @@
 const { z } = require('zod');
 const timetableService = require('../services/timetable.service');
 const { parseDate, todayAsIsoDate } = require('../utils/dates');
-const { fetchImageBuffer } = require('../utils/imageProxy');
+const { fetchImageBuffer, isAllowedGrietUrl } = require('../utils/imageProxy');
 
 const idSchema = z.coerce.number().int().positive();
 
@@ -105,12 +105,12 @@ async function getFacultyImage(req, res) {
   // Stream upstream image through HTTPS backend to bypass browser mixed-content / SSL certificate errors
   if (faculty.imageSourceUrl) {
     try {
-      const { buffer, contentType } = await fetchImageBuffer(faculty.imageSourceUrl);
+      const { buffer, contentType } = await fetchImageBuffer(faculty.imageSourceUrl, { enforceGrietDomain: false });
       res.set('X-Content-Type-Options', 'nosniff');
       res.set('Cache-Control', 'public, max-age=86400, s-maxage=604800');
       return res.type(contentType).send(buffer);
     } catch {
-      // Upstream failed; fallback to stored image data if available
+      // Upstream image fetch failed; fallback to stored image data if available
     }
   }
 
@@ -129,13 +129,12 @@ async function proxyFacultyAvatar(req, res) {
     return res.status(400).json({ success: false, error: { code: 'MISSING_URL', message: 'url query parameter is required' } });
   }
 
-  try {
-    const parsed = new URL(rawUrl);
-    if (!parsed.hostname.includes('griet.ac.in')) {
-      return res.status(403).json({ success: false, error: { code: 'FORBIDDEN_DOMAIN', message: 'Only GRIET domain images can be proxied' } });
-    }
+  if (!isAllowedGrietUrl(rawUrl)) {
+    return res.status(403).json({ success: false, error: { code: 'FORBIDDEN_DOMAIN', message: 'Only GRIET HTTP/HTTPS domain images can be proxied' } });
+  }
 
-    const { buffer, contentType } = await fetchImageBuffer(rawUrl);
+  try {
+    const { buffer, contentType } = await fetchImageBuffer(rawUrl, { enforceGrietDomain: true });
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('Cache-Control', 'public, max-age=86400, s-maxage=604800');
     return res.type(contentType).send(buffer);

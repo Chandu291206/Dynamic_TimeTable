@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   createFaculty,
   deleteFaculty,
@@ -21,6 +21,11 @@ export default function FacultyManagement() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [storedPdfIds, setStoredPdfIds] = useState([])
+
+  // Search and Filter states
+  const [searchQuery, setSearchQuery] = useState('')
+  const [departmentFilter, setDepartmentFilter] = useState('ALL')
+  const [profileFilter, setProfileFilter] = useState('ALL')
 
   // Form states
   const [showForm, setShowForm] = useState(false)
@@ -57,6 +62,54 @@ export default function FacultyManagement() {
   useEffect(() => {
     loadData()
   }, [])
+
+  const departmentOptions = useMemo(() => {
+    const set = new Set()
+    for (const f of facultyList) {
+      if (f.department && f.department.trim()) {
+        set.add(f.department.trim())
+      }
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [facultyList])
+
+  const filteredFaculty = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    return facultyList.filter((f) => {
+      if (departmentFilter !== 'ALL' && (f.department || '').trim() !== departmentFilter) {
+        return false
+      }
+      if (profileFilter === 'HAS_PHOTO' && !f.imageSourceUrl && !f.imageUrl) {
+        return false
+      }
+      if (profileFilter === 'NO_PHOTO' && (f.imageSourceUrl || f.imageUrl)) {
+        return false
+      }
+      if (profileFilter === 'HAS_PROFILE' && !f.profileSourceUrl) {
+        return false
+      }
+      if (profileFilter === 'NO_PROFILE' && f.profileSourceUrl) {
+        return false
+      }
+      if (q) {
+        const haystack = [
+          f.name,
+          f.staffId,
+          f.email,
+          f.department,
+          f.designation,
+          f.qualification,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+        if (!haystack.includes(q)) return false
+      }
+      return true
+    })
+  }, [facultyList, searchQuery, departmentFilter, profileFilter])
+
+  const hasActiveFilters = searchQuery.trim() !== '' || departmentFilter !== 'ALL' || profileFilter !== 'ALL'
 
   const handleSync = async () => {
     setSyncing(true)
@@ -373,6 +426,67 @@ export default function FacultyManagement() {
         </div>
       )}
 
+      {/* Search & Filter Bar */}
+      {!loading && facultyList.length > 0 && (
+        <div className="faculty-filter-bar" role="search" aria-label="Filter faculty directory">
+          <div className="faculty-filter-search">
+            <input
+              type="search"
+              className="text-input"
+              placeholder="Search by name, staff ID, email, or designation…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search faculty"
+            />
+          </div>
+          <div className="faculty-filter-select">
+            <select
+              className="select-input"
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              aria-label="Filter by department"
+            >
+              <option value="ALL">All Departments</option>
+              {departmentOptions.map((dept) => (
+                <option key={dept} value={dept}>{dept}</option>
+              ))}
+            </select>
+          </div>
+          <div className="faculty-filter-select">
+            <select
+              className="select-input"
+              value={profileFilter}
+              onChange={(e) => setProfileFilter(e.target.value)}
+              aria-label="Filter by photo or profile status"
+            >
+              <option value="ALL">All Profiles</option>
+              <option value="HAS_PHOTO">With Photo</option>
+              <option value="NO_PHOTO">Missing Photo</option>
+              <option value="HAS_PROFILE">With Web Profile</option>
+              <option value="NO_PROFILE">Missing Web Profile</option>
+            </select>
+          </div>
+          <div className="faculty-filter-meta">
+            <span className="badge-count">
+              {filteredFaculty.length} / {facultyList.length}
+            </span>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => {
+                  setSearchQuery('')
+                  setDepartmentFilter('ALL')
+                  setProfileFilter('ALL')
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Table of Faculty Records */}
       {loading ? (
         <div className="schedule-state schedule-loading">
@@ -383,6 +497,11 @@ export default function FacultyManagement() {
         <div className="admin-empty-card">
           <h3>No faculty records</h3>
           <p>You can add faculty records manually or click "Sync From Official GRIET Website" to import them automatically.</p>
+        </div>
+      ) : filteredFaculty.length === 0 ? (
+        <div className="admin-empty-card">
+          <h3>No matching faculty found</h3>
+          <p>Try adjusting your search query or clearing the active filters.</p>
         </div>
       ) : (
         <div className="admin-table-wrapper">
@@ -400,7 +519,7 @@ export default function FacultyManagement() {
               </tr>
             </thead>
             <tbody>
-              {facultyList.map((faculty) => (
+              {filteredFaculty.map((faculty) => (
                 <tr key={faculty.id}>
                   <td>
                     <FacultyAvatar faculty={faculty} size="small" />

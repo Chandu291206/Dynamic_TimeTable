@@ -1,19 +1,52 @@
 const http = require('http');
 const https = require('https');
 
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB cap to prevent memory exhaustion
+const ALLOWED_IMAGE_TYPES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/avif',
+]);
+
+/**
+ * Validates that a URL uses HTTP/HTTPS and belongs strictly to griet.ac.in.
+ */
+function isAllowedGrietUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'griet.ac.in' || host.endsWith('.griet.ac.in')) {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Downloads an image buffer from a remote HTTP or HTTPS URL.
  * Automatically accepts unverified TLS certificates (common for college subdomains).
- * Follows up to 3 redirects.
+ * Enforces size limits, safe raster image MIME types, and allowlisted redirects.
  */
-function fetchImageBuffer(url, timeoutMs = 8000, maxRedirects = 3) {
+function fetchImageBuffer(url, { timeoutMs = 8000, maxRedirects = 3, maxBytes = MAX_IMAGE_BYTES, enforceGrietDomain = true } = {}) {
   return new Promise((resolve, reject) => {
     if (maxRedirects < 0) {
       return reject(new Error('Too many redirects'));
     }
 
     try {
-      const parsed = new URL(url);
+      const parsed = enforceGrietDomain ? isAllowedGrietUrl(url) : new URL(url);
+      if (!parsed || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')) {
+        return reject(new Error('Invalid or disallowed image URL'));
+      }
+
       const isHttps = parsed.protocol === 'https:';
       const client = isHttps ? https : http;
 
@@ -24,7 +57,7 @@ function fetchImageBuffer(url, timeoutMs = 8000, maxRedirects = 3) {
         method: 'GET',
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+          'Accept': 'image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8',
         },
         timeout: timeoutMs,
       };
@@ -36,7 +69,13 @@ function fetchImageBuffer(url, timeoutMs = 8000, maxRedirects = 3) {
       const req = client.request(options, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           const redirectUrl = new URL(res.headers.location, url).toString();
-          return fetchImageBuffer(redirectUrl, timeoutMs, maxRedirects - 1)
+          // Always enforce GRIET allowlist on redirect targets to prevent SSRF chains
+          return fetchImageBuffer(redirectUrl, {
+            timeoutMs,
+            maxRedirects: maxRedirects - 1,
+            maxBytes,
+            enforceGrietDomain: true,
+          })
             .then(resolve)
             .catch(reject);
         }
@@ -45,14 +84,33 @@ function fetchImageBuffer(url, timeoutMs = 8000, maxRedirects = 3) {
           return reject(new Error(`Upstream returned HTTP ${res.statusCode}`));
         }
 
-        const contentType = res.headers['content-type'] || 'image/jpeg';
-        const chunks = [];
+        const rawType = (res.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+        if (!ALLOWED_IMAGE_TYPES.has(rawType)) {
+          res.destroy();
+          return reject(new Error(`Unsupported image content-type: ${rawType || 'unknown'}`));
+        }
 
-        res.on('data', (chunk) => chunks.push(chunk));
+        const contentLength = Number(res.headers['content-length'] || 0);
+        if (contentLength > maxBytes) {
+          res.destroy();
+          return reject(new Error('Upstream image exceeds maximum allowed size'));
+        }
+
+        const chunks = [];
+        let totalBytes = 0;
+
+        res.on('data', (chunk) => {
+          totalBytes += chunk.length;
+          if (totalBytes > maxBytes) {
+            res.destroy();
+            return reject(new Error('Upstream image exceeds maximum allowed size'));
+          }
+          chunks.push(chunk);
+        });
         res.on('end', () => {
           resolve({
             buffer: Buffer.concat(chunks),
-            contentType,
+            contentType: rawType === 'image/jpg' ? 'image/jpeg' : rawType,
           });
         });
         res.on('error', reject);
@@ -70,4 +128,4 @@ function fetchImageBuffer(url, timeoutMs = 8000, maxRedirects = 3) {
   });
 }
 
-module.exports = { fetchImageBuffer };
+module.exports = { fetchImageBuffer, isAllowedGrietUrl, ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES };

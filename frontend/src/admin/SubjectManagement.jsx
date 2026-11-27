@@ -227,7 +227,7 @@ export default function SubjectManagement() {
                 <p>No subjects added yet. Create your first subject using the form.</p>
               </div>
             ) : (
-              <div className="admin-table-wrapper">
+              <div className="admin-table-wrapper admin-table-scroll">
                 <table className="admin-table">
                   <thead>
                     <tr>

@@ -188,25 +188,31 @@ async function scrapeWebSingle(req, res) {
   return res.json({ success: true, data: result });
 }
 
+const { isAllowedGrietUrl } = require('../utils/imageProxy');
+
 async function proxyPdf(req, res) {
   const rawUrl = req.query.url;
   if (!rawUrl) {
     return res.status(400).json({ success: false, error: { code: 'MISSING_URL', message: 'url query parameter is required' } });
   }
+  if (!isAllowedGrietUrl(rawUrl)) {
+    return res.status(403).json({ success: false, error: { code: 'INVALID_DOMAIN', message: 'Only GRIET HTTP/HTTPS domain URLs can be proxied' } });
+  }
   try {
-    const parsed = new URL(rawUrl);
-    if (!parsed.hostname.includes('griet.ac.in')) {
-      return res.status(403).json({ success: false, error: { code: 'INVALID_DOMAIN', message: 'Only GRIET domain URLs can be proxied' } });
-    }
     const response = await fetch(rawUrl, {
       signal: AbortSignal.timeout(15000),
       headers: { 'user-agent': 'Timetable-Management-System/1.0' },
+      redirect: 'error',
     });
     if (!response.ok) {
       return res.status(response.status).json({ success: false, error: { code: 'FETCH_FAILED', message: `Upstream HTTP ${response.status}` } });
     }
     res.set('Content-Type', 'application/pdf');
+    res.set('X-Content-Type-Options', 'nosniff');
     const arrayBuffer = await response.arrayBuffer();
+    if (arrayBuffer.byteLength > 15 * 1024 * 1024) {
+      return res.status(413).json({ success: false, error: { code: 'FILE_TOO_LARGE', message: 'PDF exceeds 15MB limit' } });
+    }
     return res.send(Buffer.from(arrayBuffer));
   } catch (err) {
     return res.status(502).json({ success: false, error: { code: 'PROXY_FAILED', message: err.message } });
@@ -220,16 +226,20 @@ async function extractPdfText(req, res) {
     if (data) {
       buffer = Buffer.from(data, 'base64');
     } else if (url) {
-      const parsed = new URL(url);
-      if (!parsed.hostname.includes('griet.ac.in')) {
-        return res.status(403).json({ success: false, error: { code: 'INVALID_DOMAIN', message: 'Only GRIET URLs allowed' } });
+      if (!isAllowedGrietUrl(url)) {
+        return res.status(403).json({ success: false, error: { code: 'INVALID_DOMAIN', message: 'Only GRIET HTTP/HTTPS URLs allowed' } });
       }
       const response = await fetch(url, {
         signal: AbortSignal.timeout(15000),
         headers: { 'user-agent': 'Timetable-Management-System/1.0' },
+        redirect: 'error',
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      buffer = Buffer.from(await response.arrayBuffer());
+      const arrayBuffer = await response.arrayBuffer();
+      if (arrayBuffer.byteLength > 15 * 1024 * 1024) {
+        return res.status(413).json({ success: false, error: { code: 'FILE_TOO_LARGE', message: 'PDF exceeds 15MB limit' } });
+      }
+      buffer = Buffer.from(arrayBuffer);
     } else {
       return res.status(400).json({ success: false, error: { code: 'MISSING_DATA', message: 'data (base64) or url is required' } });
     }

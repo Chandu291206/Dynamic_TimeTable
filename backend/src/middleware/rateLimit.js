@@ -4,9 +4,7 @@ function createRateLimiter({
   message = 'Too many login attempts. Please try again later.',
   statusCode = 429,
   keyGenerator = (req) => {
-    const forwarded = req.headers['x-forwarded-for'];
-    const ip = forwarded ? forwarded.split(',')[0].trim() : req.socket?.remoteAddress || req.ip || 'unknown';
-    return ip;
+    return req.ip || req.socket?.remoteAddress || 'unknown';
   },
 } = {}) {
   const hits = new Map();
